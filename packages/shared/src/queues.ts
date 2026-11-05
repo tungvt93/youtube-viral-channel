@@ -6,6 +6,8 @@ export const QUEUE_NAMES = {
   channelEnrichment: "channel-enrichment",
   videoMonitoring: "video-monitoring",
   videoScoring: "video-scoring",
+  channelVideoDiscovery: "channel-video-discovery",
+  channelScoring: "channel-scoring",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -36,7 +38,8 @@ export interface VideoEnrichmentCandidate {
  */
 export interface VideoEnrichmentJobData {
   jobRunId: string;
-  marketId: string;
+  /** Null for channel-uploads-sourced items (PRD §9.5) — discovery isn't market-scoped there. */
+  marketId: string | null;
   discoveryQueryId: string | null;
   source: string;
   discoveredAt: string;
@@ -61,3 +64,17 @@ export type VideoMonitoringJobData = Record<string, never>;
  * re-selects whichever videos are eligible from the database on every tick.
  */
 export type VideoScoringJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoMonitoringJobData`: the
+ * channel-video-discovery tick re-selects whichever channels are due for an
+ * uploads-playlist poll from the database on every tick.
+ */
+export type ChannelVideoDiscoveryJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoScoringJobData`: the
+ * channel-scoring tick re-selects whichever channels are eligible from the
+ * database on every tick.
+ */
+export type ChannelScoringJobData = Record<string, never>;

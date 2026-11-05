@@ -8,6 +8,8 @@ import { startHealthServer } from "./health-server";
 import { createQueues } from "./queues/index";
 import {
   createChannelEnrichmentProcessor,
+  createChannelScoringProcessor,
+  createChannelVideoDiscoveryProcessor,
   createDiscoveryRegionalProcessor,
   createDiscoverySearchProcessor,
   createVideoEnrichmentProcessor,
@@ -16,6 +18,8 @@ import {
   type ProcessorDeps,
 } from "./processors/index";
 import {
+  registerChannelScoringScheduler,
+  registerChannelVideoDiscoveryScheduler,
   registerDiscoverySchedulers,
   registerVideoMonitoringScheduler,
   registerVideoScoringScheduler,
@@ -39,6 +43,8 @@ const workers = [
   new Worker(QUEUE_NAMES.channelEnrichment, createChannelEnrichmentProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.videoMonitoring, createVideoMonitoringProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.videoScoring, createVideoScoringProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.channelVideoDiscovery, createChannelVideoDiscoveryProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.channelScoring, createChannelScoringProcessor(deps), { connection }),
 ];
 
 for (const worker of workers) {
@@ -62,8 +68,16 @@ registerVideoScoringScheduler(queues)
   .then(() => logger.info("registered video-scoring scheduler"))
   .catch((error) => logger.error({ status: "error" }, `failed to register video-scoring scheduler: ${String(error)}`));
 
+registerChannelVideoDiscoveryScheduler(queues)
+  .then(() => logger.info("registered channel-video-discovery scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register channel-video-discovery scheduler: ${String(error)}`));
+
+registerChannelScoringScheduler(queues)
+  .then(() => logger.info("registered channel-scoring scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register channel-scoring scheduler: ${String(error)}`));
+
 logger.info(
-  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring",
+  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring",
 );
 
 async function shutdown(): Promise<void> {

@@ -63,6 +63,23 @@ export function getVideoById(db: PrismaClient, id: string): Promise<Video | null
   return db.video.findUnique({ where: { id } });
 }
 
+/**
+ * Which of the given YouTube video ids are already known, as a single
+ * batched query (not one `getVideoByYoutubeId` call per id) — used by
+ * channel-video-discovery to skip re-enriching uploads-playlist items the
+ * system has already seen on a prior poll (PRD §9.5).
+ */
+export async function listKnownYoutubeVideoIds(db: PrismaClient, youtubeVideoIds: string[]): Promise<Set<string>> {
+  if (youtubeVideoIds.length === 0) {
+    return new Set();
+  }
+  const rows = await db.video.findMany({
+    where: { youtubeVideoId: { in: youtubeVideoIds } },
+    select: { youtubeVideoId: true },
+  });
+  return new Set(rows.map((row) => row.youtubeVideoId));
+}
+
 export interface DueSnapshotVideo {
   id: string;
   youtubeVideoId: string;

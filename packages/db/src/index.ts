@@ -19,6 +19,7 @@ export {
   getVideoById,
   getVideoByYoutubeId,
   listChannelPeerViews,
+  listKnownYoutubeVideoIds,
   listVideosDueForSnapshot,
   listVideosEligibleForScoring,
   updateVideoMonitoringState,
@@ -38,8 +39,30 @@ export type { InsertVideoSnapshotInput } from "./repositories/video-snapshots";
 export { insertVideoScore, listVideoScores } from "./repositories/video-scores";
 export type { InsertVideoScoreInput } from "./repositories/video-scores";
 
-export { ensureChannelStub, getChannelByYoutubeId, upsertChannel } from "./repositories/channels";
-export type { ChannelUpsertInput } from "./repositories/channels";
+export {
+  ensureChannelStub,
+  getChannelByYoutubeId,
+  getChannelDetail,
+  listChannels,
+  listChannelsDueForVideoDiscovery,
+  listChannelsEligibleForScoring,
+  listChannelVideosForScoring,
+  updateChannelLastVideoDiscoveryAt,
+  updateChannelTier,
+  upsertChannel,
+} from "./repositories/channels";
+export type {
+  ChannelDetailRow,
+  ChannelListFilter,
+  ChannelListRow,
+  ChannelUpsertInput,
+  ChannelVideoForScoring,
+  DueDiscoveryChannel,
+  ScoringEligibleChannel,
+} from "./repositories/channels";
+
+export { getLatestChannelScore, insertChannelScore } from "./repositories/channel-scores";
+export type { InsertChannelScoreInput } from "./repositories/channel-scores";
 
 export { createDiscoveryEvent } from "./repositories/discovery-events";
 export type { CreateDiscoveryEventInput } from "./repositories/discovery-events";

@@ -71,3 +71,33 @@ export async function registerVideoScoringScheduler(queues: Queues): Promise<voi
     { name: QUEUE_NAMES.videoScoring, data: {} },
   );
 }
+
+/** Fixed id for the single channel-video-discovery tick — same single-static-id pattern as `VIDEO_MONITORING_SCHEDULER_ID` (plan Decisions). */
+export const CHANNEL_VIDEO_DISCOVERY_SCHEDULER_ID = "channel-video-discovery-tick";
+
+/** PRD §9.5: an uploads-playlist poll doesn't need video-monitoring's 15-minute granularity — channels don't upload that often. */
+const CHANNEL_VIDEO_DISCOVERY_TICK_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Registers the single repeatable channel-video-discovery tick (idempotent, same as `registerVideoMonitoringScheduler`). */
+export async function registerChannelVideoDiscoveryScheduler(queues: Queues): Promise<void> {
+  await queues.channelVideoDiscovery.upsertJobScheduler(
+    CHANNEL_VIDEO_DISCOVERY_SCHEDULER_ID,
+    { every: CHANNEL_VIDEO_DISCOVERY_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.channelVideoDiscovery, data: {} },
+  );
+}
+
+/** Fixed id for the single channel-scoring tick — same single-static-id pattern as `VIDEO_SCORING_SCHEDULER_ID` (plan Decisions). */
+export const CHANNEL_SCORING_SCHEDULER_ID = "channel-scoring-tick";
+
+/** Decoupled from the discovery tick's own cadence, same reasoning as `VIDEO_SCORING_TICK_INTERVAL_MS` (plan Decisions). */
+const CHANNEL_SCORING_TICK_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Registers the single repeatable channel-scoring tick (idempotent, same as `registerVideoScoringScheduler`). */
+export async function registerChannelScoringScheduler(queues: Queues): Promise<void> {
+  await queues.channelScoring.upsertJobScheduler(
+    CHANNEL_SCORING_SCHEDULER_ID,
+    { every: CHANNEL_SCORING_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.channelScoring, data: {} },
+  );
+}

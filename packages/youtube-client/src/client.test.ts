@@ -131,6 +131,46 @@ describe("YouTubeClient", () => {
     });
   });
 
+  describe("listPlaylistItems", () => {
+    it("builds the playlistItems.list request and maps items by position", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            { contentDetails: { videoId: "v1", videoPublishedAt: "2026-01-01T00:00:00Z" } },
+            { contentDetails: { videoId: "v2", videoPublishedAt: "2026-01-02T00:00:00Z" } },
+          ],
+          nextPageToken: "page2",
+        }),
+      );
+      const client = new YouTubeClient({ apiKey: "k", fetchImpl });
+      const result = await client.listPlaylistItems("UUxyz", 10);
+
+      expect(result).toEqual({
+        items: [
+          { videoId: "v1", publishedAt: "2026-01-01T00:00:00Z", position: 0 },
+          { videoId: "v2", publishedAt: "2026-01-02T00:00:00Z", position: 1 },
+        ],
+        nextPageToken: "page2",
+      });
+
+      const calledUrl = fetchImpl.mock.calls[0][0] as URL;
+      expect(calledUrl.pathname).toBe("/youtube/v3/playlistItems");
+      expect(calledUrl.searchParams.get("playlistId")).toBe("UUxyz");
+      expect(calledUrl.searchParams.get("maxResults")).toBe("10");
+      expect(calledUrl.searchParams.get("part")).toBe("contentDetails");
+    });
+
+    it("defaults maxResults to 20 and skips items with no videoId", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ items: [{ contentDetails: {} }] }));
+      const client = new YouTubeClient({ apiKey: "k", fetchImpl });
+      const result = await client.listPlaylistItems("UUxyz");
+
+      expect(result.items).toEqual([]);
+      const calledUrl = fetchImpl.mock.calls[0][0] as URL;
+      expect(calledUrl.searchParams.get("maxResults")).toBe("20");
+    });
+  });
+
   describe("listChannelsByIds", () => {
     it("maps channel resources including the uploads playlist id", async () => {
       const fetchImpl = vi.fn().mockResolvedValue(

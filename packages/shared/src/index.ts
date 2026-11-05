@@ -9,6 +9,8 @@ export type { QuotaGuardDecision, QuotaGuardInput } from "./quota-guard";
 export { QUEUE_NAMES } from "./queues";
 export type {
   ChannelEnrichmentJobData,
+  ChannelScoringJobData,
+  ChannelVideoDiscoveryJobData,
   DiscoveryJobData,
   QueueName,
   VideoEnrichmentCandidate,

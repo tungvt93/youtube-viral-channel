@@ -3,6 +3,7 @@ import type { PrismaClient } from "../../generated/client";
 import {
   getVideoById,
   listChannelPeerViews,
+  listKnownYoutubeVideoIds,
   listVideosDueForSnapshot,
   listVideosEligibleForScoring,
   updateVideoMonitoringState,
@@ -164,6 +165,31 @@ describe("listChannelPeerViews", () => {
       { videoId: "video-2", currentViewCount: 9000n },
       { videoId: "video-3", currentViewCount: 8000n },
     ]);
+  });
+});
+
+describe("listKnownYoutubeVideoIds", () => {
+  it("returns a set of the already-known ids among the given ones", async () => {
+    const findMany = vi.fn().mockResolvedValue([{ youtubeVideoId: "vid1" }, { youtubeVideoId: "vid2" }]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listKnownYoutubeVideoIds(db, ["vid1", "vid2", "vid3"]);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { youtubeVideoId: { in: ["vid1", "vid2", "vid3"] } },
+      select: { youtubeVideoId: true },
+    });
+    expect(result).toEqual(new Set(["vid1", "vid2"]));
+  });
+
+  it("returns an empty set without querying when given no ids", async () => {
+    const findMany = vi.fn();
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listKnownYoutubeVideoIds(db, []);
+
+    expect(findMany).not.toHaveBeenCalled();
+    expect(result).toEqual(new Set());
   });
 });
 

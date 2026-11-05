@@ -3,7 +3,8 @@ import type { DiscoveryEvent, PrismaClient } from "../../generated/client";
 
 export interface CreateDiscoveryEventInput {
   videoId: string;
-  marketId: string;
+  /** Null for channel-uploads-sourced discovery (PRD §9.5) — not market-scoped. */
+  marketId: string | null;
   discoveryQueryId: string | null;
   source: string;
   sourceRank: number | null;

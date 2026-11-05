@@ -7,6 +7,7 @@ export const QUOTA_COST = {
   search_list: 100,
   videos_list: 1,
   channels_list: 1,
+  playlist_items_list: 1,
 } as const;
 
 export interface YouTubeErrorBody {

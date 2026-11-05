@@ -5,6 +5,7 @@ import type {
   ChannelResourceItem,
   ChannelsListResult,
   MostPopularParams,
+  PlaylistItemsListResult,
   SearchListParams,
   SearchListResult,
   SearchResultItem,
@@ -70,6 +71,18 @@ interface RawVideosResponse {
     statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
     status?: { license?: string; privacyStatus?: string; embeddable?: boolean };
     player?: { embedHtml?: string };
+  }>;
+  nextPageToken?: string;
+}
+
+interface RawPlaylistItemsResponse {
+  items?: Array<{
+    snippet?: {
+      position?: number;
+      publishedAt?: string;
+      resourceId?: { videoId?: string };
+    };
+    contentDetails?: { videoId?: string; videoPublishedAt?: string };
   }>;
   nextPageToken?: string;
 }
@@ -247,6 +260,30 @@ export class YouTubeClient {
       items.push(...(raw.items ?? []).map(mapVideoItem));
     }
     return { items, callsMade: batches.length };
+  }
+
+  /**
+   * One page of a channel's uploads playlist (PRD §6.1E) — single page only,
+   * no deep pagination (Phase 4 plan Scope-out: bounded "recent N", not a
+   * full backlog backfill). `contentDetails` is requested over `snippet` for
+   * the video id/publish time since it is the documented stable source for
+   * both on a playlistItems resource.
+   */
+  async listPlaylistItems(playlistId: string, maxResults = 20): Promise<PlaylistItemsListResult> {
+    const url = this.buildUrl("playlistItems", {
+      part: "contentDetails",
+      playlistId,
+      maxResults,
+    });
+    const raw = await this.request<RawPlaylistItemsResponse>(url);
+    const items = (raw.items ?? [])
+      .filter((item) => item.contentDetails?.videoId)
+      .map((item, index) => ({
+        videoId: item.contentDetails!.videoId!,
+        publishedAt: item.contentDetails?.videoPublishedAt ?? "",
+        position: index,
+      }));
+    return { items, nextPageToken: raw.nextPageToken };
   }
 
   async listChannelsByIds(ids: string[]): Promise<ChannelsListResult> {

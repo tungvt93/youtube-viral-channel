@@ -79,3 +79,14 @@ export interface ChannelsListResult {
   items: ChannelResourceItem[];
   callsMade: number;
 }
+
+export interface PlaylistItemResourceItem {
+  videoId: string;
+  publishedAt: string;
+  position: number;
+}
+
+export interface PlaylistItemsListResult {
+  items: PlaylistItemResourceItem[];
+  nextPageToken?: string;
+}
