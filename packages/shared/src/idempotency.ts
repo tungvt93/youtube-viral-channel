@@ -10,9 +10,15 @@ export interface DiscoveryIdempotencyKeyParams {
   dateBucket: string;
 }
 
-/** `discovery:{strategy}:{market}:{query}:{date_bucket}` per PRD §17.3. */
+/**
+ * Semantically `discovery:{strategy}:{market}:{query}:{date_bucket}` per PRD
+ * §17.3, but underscore-delimited rather than colon-delimited: this key is
+ * also used directly as BullMQ's `jobId` (so a same-day retry is a natural
+ * no-op), and BullMQ rejects any custom jobId containing `:` outside its own
+ * internal `repeat:<id>:<timestamp>` format (see plan Decisions, 2026-11-05).
+ */
 export function discoveryIdempotencyKey(params: DiscoveryIdempotencyKeyParams): string {
-  return `discovery:${params.strategy}:${params.marketCode}:${params.query}:${params.dateBucket}`;
+  return `discovery_${params.strategy}_${params.marketCode}_${params.query}_${params.dateBucket}`;
 }
 
 export interface VideoEnrichIdempotencyKeyParams {
@@ -20,7 +26,7 @@ export interface VideoEnrichIdempotencyKeyParams {
   metadataVersion: string;
 }
 
-/** `video-enrich:{video_id}:{metadata_version}` per PRD §17.3. */
+/** Semantically `video-enrich:{video_id}:{metadata_version}` per PRD §17.3 — see `discoveryIdempotencyKey` for why `:` is avoided. */
 export function videoEnrichIdempotencyKey(params: VideoEnrichIdempotencyKeyParams): string {
-  return `video-enrich:${params.videoId}:${params.metadataVersion}`;
+  return `video-enrich_${params.videoId}_${params.metadataVersion}`;
 }

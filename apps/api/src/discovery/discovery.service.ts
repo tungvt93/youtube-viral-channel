@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleDestroy } from "@nestjs/common";
+import { Injectable, NotFoundException, OnModuleDestroy, Optional } from "@nestjs/common";
 import { Queue } from "bullmq";
 import type IORedis from "ioredis";
 import { getDiscoveryQueryById, getJobRunById, prisma, startJobRun } from "@yvi/db";
@@ -22,7 +22,7 @@ export class DiscoveryService implements OnModuleDestroy {
   private readonly discoveryRegional: Queue;
   private readonly discoverySearch: Queue;
 
-  constructor(deps: DiscoveryServiceDeps = {}) {
+  constructor(@Optional() deps: DiscoveryServiceDeps = {}) {
     this.connection = deps.connection ?? createRedisConnection();
     this.discoveryRegional = deps.discoveryRegional ?? new Queue(QUEUE_NAMES.discoveryRegional, { connection: this.connection });
     this.discoverySearch = deps.discoverySearch ?? new Queue(QUEUE_NAMES.discoverySearch, { connection: this.connection });

@@ -19,13 +19,13 @@ describe("discoveryIdempotencyKey", () => {
       query: "funny pets",
       dateBucket: "2026-11-05",
     });
-    expect(key).toBe("discovery:recent_search:US:funny pets:2026-11-05");
+    expect(key).toBe("discovery_recent_search_US_funny pets_2026-11-05");
   });
 });
 
 describe("videoEnrichIdempotencyKey", () => {
   it("builds the video-enrich key in the documented format", () => {
     const key = videoEnrichIdempotencyKey({ videoId: "abc123", metadataVersion: "2026-11-05" });
-    expect(key).toBe("video-enrich:abc123:2026-11-05");
+    expect(key).toBe("video-enrich_abc123_2026-11-05");
   });
 });

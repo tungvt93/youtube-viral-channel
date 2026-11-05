@@ -4,7 +4,7 @@ Date: 2026-11-05
 
 ## Status
 
-Active
+Complete
 
 ## Outcome
 
@@ -191,8 +191,8 @@ Out of scope (later phases, per PRD §25):
 - [x] Pino redact rule confirmed/added for `YOUTUBE_API_KEY`.
 - [x] Mocked-API test suite green end-to-end (discovery → enrichment →
       dedup → DB rows), no real key required.
-- [ ] User creates real Google Cloud project + API key, supplies via `.env`.
-- [ ] One real end-to-end run against a single market/topic, low page
+- [x] User creates real Google Cloud project + API key, supplies via `.env`.
+- [x] One real end-to-end run against a single market/topic, low page
       limit; result inspected via Prisma Studio/`psql`.
 
 ## Decisions
@@ -258,6 +258,34 @@ Out of scope (later phases, per PRD §25):
   `upsert`; verified idempotent by re-running the seed twice against the real
   Dockerized Postgres and confirming row counts (4 markets, 6 topics, 48
   `discovery_queries`) stayed identical.
+- 2026-11-05: `discoveryIdempotencyKey`/`videoEnrichIdempotencyKey`
+  (`packages/shared/src/idempotency.ts`) switched from colon-delimited to
+  underscore-delimited output, discovered only by starting `apps/worker`
+  live against real Redis: BullMQ's `Job.validateOptions()` rejects any
+  custom `jobId` containing `:` unless it has exactly 3 colon-delimited
+  segments (its own reserved `repeat:<schedulerId>:<timestamp>` shape). The
+  PRD §17.3 colon format is an internal dedup-key semantic, not an external
+  contract, so the separator change is safe. `apps/worker/src/job-helpers.ts`
+  (`enqueueWithJobRun`) additionally sanitizes `:` → `_` on any `jobId` it is
+  given, since chained enqueues (`discovery-regional`/`discovery-search` →
+  `video-enrichment` → `channel-enrichment`) build composite ids by
+  appending suffixes (`:enrich:0`, `:channels`) to a parent BullMQ job's own
+  id — which for a scheduled tick is already BullMQ's 3-segment `repeat:...`
+  form, so appending anything pushes it over the limit. Mocked-API tests
+  never exercise BullMQ's real `validateOptions()`, so this was invisible
+  until the first live run (worker log: repeated `"Error: Custom Id cannot
+  contain :"` on every scheduled discovery tick).
+- 2026-11-05: `DiscoveryService`'s constructor parameter (`deps:
+  DiscoveryServiceDeps = {}`, used for test-only dependency injection) has
+  no NestJS-resolvable type (an interface erases to `Object` at runtime), so
+  Nest's DI container tried to resolve it as a real provider and failed
+  with `Nest can't resolve dependencies of the DiscoveryService (?)` on the
+  first real `apps/api` boot — again only visible once the server was
+  actually started, not under the service's unit tests (which call `new
+  DiscoveryService(...)` directly, bypassing Nest's container). Fixed by
+  adding `@Optional()` to the parameter: Nest now resolves it to `undefined`
+  on lookup failure instead of throwing, which falls through to the existing
+  `= {}` default.
 
 ## Validation
 
@@ -278,11 +306,54 @@ Out of scope (later phases, per PRD §25):
 
 ## Result
 
-Progress items 1–10 are complete and validated against mocked API responses
-and a real Dockerized Postgres. Items 11–12 (real `YOUTUBE_API_KEY` creation
-and one live end-to-end run) are **not** done — no credential exists and none
-was fabricated, per this task's explicit instruction. The plan's Status stays
-`Active` until those two remain.
+All 12 Progress items are complete. Items 1–10 were validated against mocked
+API responses and a real Dockerized Postgres. Items 11–12 (real
+`YOUTUBE_API_KEY`, one live end-to-end run) are now also done: the user
+supplied a real Google Cloud YouTube Data API key, and a live run was
+executed against the real YouTube API, real Redis, and real Postgres.
+
+**Two integration bugs were found and fixed only by actually running the
+live system** (neither was, or could have been, caught by the mocked-API
+test suite):
+
+1. BullMQ rejects any custom `jobId` containing `:` outside its own
+   3-segment `repeat:<id>:<timestamp>` format. This broke both the
+   scheduler-driven path (chained `:enrich:N`/`:channels` suffixes appended
+   to a parent job's id) and the manual-trigger API path (the PRD §17.3
+   colon-delimited idempotency key used directly as `jobId`). Fixed by
+   switching the idempotency key format to underscore-delimited
+   (`packages/shared/src/idempotency.ts`) and adding a defensive `:` → `_`
+   sanitize in `apps/worker/src/job-helpers.ts`'s `enqueueWithJobRun`. See
+   Decisions.
+2. `apps/api` failed to boot at all (`Nest can't resolve dependencies of the
+   DiscoveryService`) because `DiscoveryService`'s test-injection
+   constructor parameter had no NestJS-resolvable type. Fixed with
+   `@Optional()`. See Decisions.
+
+**Live verification evidence** (`e9a66350-3061-4ede-8b77-05e27f982fab`,
+market GB, query "funny animals", strategy `recent_search`, triggered via
+`POST /discovery/queries/:id/run`):
+
+- Job `discovery_recent_search_GB_funny animals_2026-11-05` completed in
+  813ms with `resultCount: 50`.
+- Chain completed end-to-end: `discovery-search` → `video-enrichment` (50
+  videos) → `channel-enrichment` (48 channels), all `JobRun` rows
+  `status: completed`.
+- Real video rows in Postgres, e.g. `youtube_video_id=EsjafH4L30s`,
+  title "Cockroaches.. #insects #cricket #cute #funny #animals ...",
+  `current_view_count=8235` — genuine YouTube data, not fixtures.
+- `api_usage_logs` recorded the real calls: `search.list` (100 units),
+  `videos.list(byId)` (1 unit), `channels.list` (1 unit) — 102 units for
+  this one triggered run.
+
+**Quota note**: before this fix, the pre-fix worker had been running live
+for several minutes with the real key and fired scheduled ticks for
+multiple seeded queries; each tick's discovery API call succeeded before
+the chained enqueue threw. `api_usage_logs` shows this cost ~2,424 quota
+units (24× `search.list` + 24× `videos.list(mostPopular)`) before the
+worker was stopped — out of a default 10,000/day budget. No further calls
+occurred after the fix; this is a one-time cost from catching the bug live
+rather than an ongoing issue.
 
 **What was built** (this session, on top of the already-complete
 `packages/youtube-client`/Shorts-heuristic/quota-guard/idempotency-key work

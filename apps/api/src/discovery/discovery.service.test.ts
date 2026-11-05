@@ -27,14 +27,14 @@ describe("DiscoveryService", () => {
       strategy: "most_popular",
       market: { code: "US" },
     });
-    startJobRun.mockResolvedValue({ id: "discovery:most_popular:US:funny pets:" });
+    startJobRun.mockResolvedValue({ id: "discovery_most_popular_US_funny pets_" });
     const discoveryRegional = makeQueue();
     const discoverySearch = makeQueue();
     const service = new DiscoveryService({ discoveryRegional: discoveryRegional as never, discoverySearch: discoverySearch as never });
 
     const result = await service.triggerRun("q1");
 
-    expect(result.jobId).toMatch(/^discovery:most_popular:US:funny pets:\d{4}-\d{2}-\d{2}$/);
+    expect(result.jobId).toMatch(/^discovery_most_popular_US_funny pets_\d{4}-\d{2}-\d{2}$/);
     expect(discoveryRegional.add).toHaveBeenCalledTimes(1);
     expect(discoverySearch.add).not.toHaveBeenCalled();
     expect(startJobRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: result.jobId }));
@@ -47,7 +47,7 @@ describe("DiscoveryService", () => {
       strategy: "recent_search",
       market: { code: "DE" },
     });
-    startJobRun.mockResolvedValue({ id: "discovery:recent_search:DE:gaming highlights:" });
+    startJobRun.mockResolvedValue({ id: "discovery_recent_search_DE_gaming highlights_" });
     const discoveryRegional = makeQueue();
     const discoverySearch = makeQueue();
     const service = new DiscoveryService({ discoveryRegional: discoveryRegional as never, discoverySearch: discoverySearch as never });
