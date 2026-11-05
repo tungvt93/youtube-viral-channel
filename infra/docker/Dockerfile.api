@@ -1,0 +1,16 @@
+FROM node:20-alpine AS builder
+RUN apk add --no-cache openssl
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @yvi/api run build
+
+FROM node:20-alpine AS runtime
+RUN apk add --no-cache openssl
+RUN corepack enable
+ENV NODE_ENV=production
+WORKDIR /repo
+COPY --from=builder /repo /repo
+EXPOSE 3001
+CMD ["pnpm", "--filter", "@yvi/api", "run", "start"]

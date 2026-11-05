@@ -1,0 +1,14 @@
+FROM node:20-alpine AS builder
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @yvi/worker run build
+
+FROM node:20-alpine AS runtime
+RUN corepack enable
+ENV NODE_ENV=production
+WORKDIR /repo
+COPY --from=builder /repo /repo
+EXPOSE 3002
+CMD ["pnpm", "--filter", "@yvi/worker", "run", "start"]

@@ -1,0 +1,435 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.1
+// ---------------------------------------------------------------------------
+model Market {
+  id               String   @id @default(uuid())
+  code             String   @unique @db.VarChar(2)
+  name             String   @db.VarChar(100)
+  defaultLanguage  String   @map("default_language") @db.VarChar(10)
+  timezone         String   @db.VarChar(64)
+  enabled          Boolean  @default(false)
+  config           Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  discoveryQueries DiscoveryQuery[]
+  discoveryEvents  DiscoveryEvent[]
+  trendSnapshots   TrendSnapshot[]
+  apiUsageLogs     ApiUsageLog[]
+
+  @@map("markets")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.2
+// ---------------------------------------------------------------------------
+model DiscoveryQuery {
+  id               String    @id @default(uuid())
+  marketId         String    @map("market_id")
+  topicId          String?   @map("topic_id")
+  query            String
+  language          String   @db.VarChar(10)
+  strategy         String    @db.VarChar(40)
+  priority         Int      @db.SmallInt
+  enabled          Boolean  @default(true)
+  maxPagesPerRun   Int      @map("max_pages_per_run") @db.SmallInt
+  frequencyMinutes Int      @map("frequency_minutes")
+  lastRunAt        DateTime? @map("last_run_at")
+  config           Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  market           Market    @relation(fields: [marketId], references: [id])
+  topic            Topic?    @relation(fields: [topicId], references: [id])
+  discoveryEvents  DiscoveryEvent[]
+
+  @@index([marketId, enabled, priority])
+  @@index([topicId])
+  @@map("discovery_queries")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.3
+// ---------------------------------------------------------------------------
+model Video {
+  id                    String   @id @default(uuid())
+  youtubeVideoId        String   @unique @map("youtube_video_id") @db.VarChar(32)
+  channelId             String?  @map("channel_id")
+  title                 String
+  description           String
+  publishedAt           DateTime @map("published_at")
+  durationSeconds       Int?     @map("duration_seconds")
+  categoryId            String   @map("category_id") @db.VarChar(32)
+  defaultLanguage       String?  @map("default_language") @db.VarChar(10)
+  thumbnailUrl          String?  @map("thumbnail_url")
+  currentViewCount      BigInt?  @map("current_view_count")
+  currentLikeCount      BigInt?  @map("current_like_count")
+  currentCommentCount   BigInt?  @map("current_comment_count")
+  videoLicense          String?  @map("video_license") @db.VarChar(32)
+  privacyStatus         String?  @map("privacy_status") @db.VarChar(32)
+  embeddable            Boolean?
+  liveBroadcastContent  String?  @map("live_broadcast_content") @db.VarChar(32)
+  formatClassification  String   @default("unknown") @map("format_classification") @db.VarChar(32)
+  formatConfidence      Decimal  @default(0) @map("format_confidence") @db.Decimal(5, 4)
+  firstDiscoveredAt     DateTime @default(now()) @map("first_discovered_at")
+  lastEnrichedAt        DateTime? @map("last_enriched_at")
+  metadata              Json     @default("{}")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  channel               Channel? @relation(fields: [channelId], references: [id])
+  discoveryEvents       DiscoveryEvent[]
+  videoSnapshots        VideoSnapshot[]
+  videoTopics           VideoTopic[]
+  videoScores           VideoScore[]
+  aiClassificationRuns  AiClassificationRun[]
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([currentViewCount(sort: Desc)])
+  @@index([channelId, publishedAt(sort: Desc)])
+  @@map("videos")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.4
+// ---------------------------------------------------------------------------
+model Channel {
+  id                      String    @id @default(uuid())
+  youtubeChannelId        String    @unique @map("youtube_channel_id") @db.VarChar(32)
+  title                   String
+  description             String
+  customUrl               String?   @map("custom_url")
+  thumbnailUrl            String?   @map("thumbnail_url")
+  creatorCountry          String?   @map("creator_country") @db.VarChar(2)
+  publishedAt             DateTime? @map("published_at")
+  uploadsPlaylistId       String?   @map("uploads_playlist_id") @db.VarChar(128)
+  currentSubscriberCount  BigInt?   @map("current_subscriber_count")
+  currentViewCount        BigInt?   @map("current_view_count")
+  currentVideoCount       BigInt?   @map("current_video_count")
+  subscriberCountHidden   Boolean   @default(false) @map("subscriber_count_hidden")
+  firstDiscoveredAt       DateTime  @default(now()) @map("first_discovered_at")
+  lastEnrichedAt          DateTime? @map("last_enriched_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  videos                  Video[]
+  channelSnapshots        ChannelSnapshot[]
+  channelScores           ChannelScore[]
+
+  @@map("channels")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.5
+// ---------------------------------------------------------------------------
+model DiscoveryEvent {
+  id               String   @id @default(uuid())
+  videoId          String   @map("video_id")
+  marketId         String   @map("market_id")
+  discoveryQueryId String?  @map("discovery_query_id")
+  source           String   @db.VarChar(40)
+  sourceRank       Int?     @map("source_rank")
+  discoveredAt     DateTime @map("discovered_at")
+  sourcePayload    Json?    @map("source_payload")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  video            Video           @relation(fields: [videoId], references: [id])
+  market           Market          @relation(fields: [marketId], references: [id])
+  discoveryQuery   DiscoveryQuery? @relation(fields: [discoveryQueryId], references: [id])
+
+  @@index([marketId, discoveredAt(sort: Desc)])
+  @@index([videoId, discoveredAt(sort: Desc)])
+  @@index([source, discoveredAt(sort: Desc)])
+  @@map("discovery_events")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.6
+// ---------------------------------------------------------------------------
+model VideoSnapshot {
+  id            BigInt   @id @default(autoincrement())
+  videoId       String   @map("video_id")
+  collectedAt   DateTime @map("collected_at")
+  viewCount     BigInt?  @map("view_count")
+  likeCount     BigInt?  @map("like_count")
+  commentCount  BigInt?  @map("comment_count")
+  fetchStatus   String   @map("fetch_status") @db.VarChar(20)
+  source        String   @db.VarChar(40)
+  rawHash       String?  @map("raw_hash") @db.VarChar(64)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  video         Video    @relation(fields: [videoId], references: [id])
+
+  @@unique([videoId, collectedAt])
+  @@index([videoId, collectedAt(sort: Desc)])
+  @@map("video_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.7
+// ---------------------------------------------------------------------------
+model ChannelSnapshot {
+  id               BigInt   @id @default(autoincrement())
+  channelId        String   @map("channel_id")
+  collectedAt      DateTime @map("collected_at")
+  subscriberCount  BigInt?  @map("subscriber_count")
+  viewCount        BigInt?  @map("view_count")
+  videoCount       BigInt?  @map("video_count")
+  fetchStatus      String   @map("fetch_status") @db.VarChar(20)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  channel          Channel  @relation(fields: [channelId], references: [id])
+
+  @@unique([channelId, collectedAt])
+  @@index([channelId, collectedAt(sort: Desc)])
+  @@map("channel_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.8
+// ---------------------------------------------------------------------------
+model Topic {
+  id                 String   @id @default(uuid())
+  slug               String   @unique @db.VarChar(160)
+  canonicalName       String   @map("canonical_name") @db.VarChar(200)
+  description        String
+  parentTopicId      String?  @map("parent_topic_id")
+  status             String   @default("candidate") @db.VarChar(20)
+  confidence         Decimal  @default(0) @db.Decimal(5, 4)
+  createdBy          String   @map("created_by") @db.VarChar(20)
+  mergedIntoTopicId  String?  @map("merged_into_topic_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  parentTopic        Topic?   @relation("TopicHierarchy", fields: [parentTopicId], references: [id])
+  childTopics         Topic[]  @relation("TopicHierarchy")
+  mergedIntoTopic     Topic?   @relation("TopicMerge", fields: [mergedIntoTopicId], references: [id])
+  mergedFromTopics    Topic[]  @relation("TopicMerge")
+  discoveryQueries    DiscoveryQuery[]
+  topicLocalizations  TopicLocalization[]
+  videoTopics         VideoTopic[]
+  trendSnapshots      TrendSnapshot[]
+
+  @@map("topics")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.9
+// ---------------------------------------------------------------------------
+model TopicLocalization {
+  id             String @id @default(uuid())
+  topicId        String @map("topic_id")
+  language       String @db.VarChar(10)
+  localizedName  String @map("localized_name") @db.VarChar(200)
+  synonyms       Json   @default("[]")
+  seedKeywords   Json   @default("[]") @map("seed_keywords")
+
+  topic          Topic  @relation(fields: [topicId], references: [id])
+
+  @@unique([topicId, language])
+  @@map("topic_localizations")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.10
+// ---------------------------------------------------------------------------
+model VideoTopic {
+  videoId              String   @map("video_id")
+  topicId              String   @map("topic_id")
+  relationType         String   @map("relation_type") @db.VarChar(20)
+  confidence           Decimal  @db.Decimal(5, 4)
+  classificationModel  String   @map("classification_model") @db.VarChar(60)
+  promptVersion        String   @map("prompt_version") @db.VarChar(40)
+  classifiedAt         DateTime @map("classified_at")
+
+  video                Video    @relation(fields: [videoId], references: [id])
+  topic                Topic    @relation(fields: [topicId], references: [id])
+
+  @@id([videoId, topicId])
+  @@map("video_topics")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.11
+// ---------------------------------------------------------------------------
+model TrendSnapshot {
+  id                   BigInt   @id @default(autoincrement())
+  marketId             String   @map("market_id")
+  topicId              String   @map("topic_id")
+  windowStart          DateTime @map("window_start")
+  windowEnd            DateTime @map("window_end")
+  uniqueVideoCount     Int      @map("unique_video_count")
+  uniqueChannelCount   Int      @map("unique_channel_count")
+  totalObservedViews   BigInt?  @map("total_observed_views")
+  medianVph            Decimal  @map("median_vph") @db.Decimal
+  p90Vph               Decimal  @map("p90_vph") @db.Decimal
+  outlierVideoCount    Int      @map("outlier_video_count")
+  momentumScore        Decimal  @map("momentum_score") @db.Decimal(5, 2)
+  sampleConfidence     Decimal  @map("sample_confidence") @db.Decimal(5, 4)
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  market               Market   @relation(fields: [marketId], references: [id])
+  topic                Topic    @relation(fields: [topicId], references: [id])
+
+  @@unique([marketId, topicId, windowStart, windowEnd])
+  @@map("trend_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §15.12 — supporting tables (column design: minimal, consistent with
+// their one-line stated purpose elsewhere in the PRD; no business logic
+// consumes these yet in Phase 0).
+// ---------------------------------------------------------------------------
+model VideoScore {
+  id             String   @id @default(uuid())
+  videoId        String   @map("video_id")
+  computedAt     DateTime @map("computed_at")
+  viralScore     Decimal  @map("viral_score") @db.Decimal(6, 2)
+  scoreBreakdown Json     @map("score_breakdown")
+  dataConfidence Decimal  @map("data_confidence") @db.Decimal(5, 4)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  video          Video    @relation(fields: [videoId], references: [id])
+
+  @@index([videoId, computedAt(sort: Desc)])
+  @@map("video_scores")
+}
+
+model ChannelScore {
+  id             String   @id @default(uuid())
+  channelId      String   @map("channel_id")
+  computedAt     DateTime @map("computed_at")
+  channelScore   Decimal  @map("channel_score") @db.Decimal(6, 2)
+  scoreBreakdown Json     @map("score_breakdown")
+  dataConfidence Decimal  @map("data_confidence") @db.Decimal(5, 4)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  channel        Channel  @relation(fields: [channelId], references: [id])
+
+  @@index([channelId, computedAt(sort: Desc)])
+  @@map("channel_scores")
+}
+
+model WatchlistItem {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  entityType String   @map("entity_type") @db.VarChar(20)
+  entityId   String   @map("entity_id")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, entityType, entityId])
+  @@map("watchlist_items")
+}
+
+model Alert {
+  id         String    @id @default(uuid())
+  alertType  String    @map("alert_type") @db.VarChar(40)
+  entityType String    @map("entity_type") @db.VarChar(20)
+  entityId   String    @map("entity_id")
+  message    String
+  severity   String    @db.VarChar(20)
+  isRead     Boolean   @default(false) @map("is_read")
+  triggeredAt DateTime @map("triggered_at")
+  readAt     DateTime? @map("read_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([isRead, triggeredAt(sort: Desc)])
+  @@map("alerts")
+}
+
+model JobRun {
+  id           String    @id @default(uuid())
+  jobName      String    @map("job_name") @db.VarChar(100)
+  queue        String    @db.VarChar(60)
+  status       String    @db.VarChar(20)
+  startedAt    DateTime  @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  durationMs   Int?      @map("duration_ms")
+  resultCount  Int?      @map("result_count")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([queue, startedAt(sort: Desc)])
+  @@map("job_runs")
+}
+
+model ApiUsageLog {
+  id            BigInt   @id @default(autoincrement())
+  endpoint      String   @db.VarChar(100)
+  quotaEstimate Int      @map("quota_estimate")
+  status        String   @db.VarChar(20)
+  marketId      String?  @map("market_id")
+  requestTime   DateTime @map("request_time")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  market        Market?  @relation(fields: [marketId], references: [id])
+
+  @@index([endpoint, requestTime(sort: Desc)])
+  @@map("api_usage_logs")
+}
+
+model AiClassificationRun {
+  id            String    @id @default(uuid())
+  videoId       String?   @map("video_id")
+  model         String    @db.VarChar(60)
+  promptVersion String    @map("prompt_version") @db.VarChar(40)
+  inputHash     String    @map("input_hash") @db.VarChar(64)
+  output        Json?
+  status        String    @db.VarChar(20)
+  errorMessage  String?   @map("error_message")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+
+  video         Video?    @relation(fields: [videoId], references: [id])
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("ai_classification_runs")
+}
+
+model AppSetting {
+  key         String   @id @db.VarChar(100)
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         String    @default("admin") @db.VarChar(20)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  sessions       Session[]
+  watchlistItems WatchlistItem[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  sessionToken String   @unique @map("session_token") @db.VarChar(255)
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
+}
