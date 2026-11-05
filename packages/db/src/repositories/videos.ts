@@ -107,3 +107,75 @@ export function updateVideoMonitoringState(
     },
   });
 }
+
+export interface ScoringEligibleVideo {
+  id: string;
+  channelId: string | null;
+  publishedAt: Date;
+  monitoringState: string;
+  lastSnapshotAt: Date | null;
+  formatClassification: string;
+  currentViewCount: bigint | null;
+  channelSubscriberCount: bigint | null;
+}
+
+/**
+ * Candidate pool for a scoring tick (PRD §8): never `candidate`/
+ * `unavailable`/`archived` — those states are outside Phase 3's scoring
+ * ownership (see plan Scope/Decisions). Whether each video actually has
+ * enough valid snapshots to be scored is checked afterward from
+ * `listRecentValidSnapshots`, not here, to avoid a relation-count filter.
+ */
+export function listVideosEligibleForScoring(db: PrismaClient, limit: number): Promise<ScoringEligibleVideo[]> {
+  return db.video
+    .findMany({
+      where: { monitoringState: { in: ["monitoring", "high_signal", "cooling"] } },
+      orderBy: { lastSnapshotAt: "asc" },
+      take: limit,
+      select: {
+        id: true,
+        channelId: true,
+        publishedAt: true,
+        monitoringState: true,
+        lastSnapshotAt: true,
+        formatClassification: true,
+        currentViewCount: true,
+        channel: { select: { currentSubscriberCount: true } },
+      },
+    })
+    .then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        channelId: row.channelId,
+        publishedAt: row.publishedAt,
+        monitoringState: row.monitoringState,
+        lastSnapshotAt: row.lastSnapshotAt,
+        formatClassification: row.formatClassification,
+        currentViewCount: row.currentViewCount,
+        channelSubscriberCount: row.channel?.currentSubscriberCount ?? null,
+      })),
+    );
+}
+
+export interface ChannelPeerView {
+  videoId: string;
+  currentViewCount: bigint;
+}
+
+/**
+ * Up to `limit` of a channel's most-recent videos with a known view count,
+ * for the PRD §8.1E channel-outlier median baseline. One query per distinct
+ * `channelId` (not per video) — a scoring tick caches this by `channelId`
+ * and excludes the video being scored in memory, so multiple eligible
+ * videos from the same channel share one query instead of N+1.
+ */
+export function listChannelPeerViews(db: PrismaClient, channelId: string, limit: number): Promise<ChannelPeerView[]> {
+  return db.video
+    .findMany({
+      where: { channelId, currentViewCount: { not: null } },
+      orderBy: { publishedAt: "desc" },
+      take: limit,
+      select: { id: true, currentViewCount: true },
+    })
+    .then((rows) => rows.map((row) => ({ videoId: row.id, currentViewCount: row.currentViewCount as bigint })));
+}

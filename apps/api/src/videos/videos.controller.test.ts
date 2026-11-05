@@ -12,4 +12,14 @@ describe("VideosController", () => {
     expect(getSnapshots).toHaveBeenCalledWith("video-1");
     expect(result).toEqual([{ collectedAt: "2026-11-05T12:00:00.000Z", viewCount: "1000", likeCount: null, commentCount: null, fetchStatus: "ok", source: "videos.list" }]);
   });
+
+  it("delegates a score-history lookup to the service", async () => {
+    const getScores = vi.fn().mockResolvedValue([{ computedAt: "2026-11-05T12:00:00.000Z", viralScore: 72.5, scoreBreakdown: {}, dataConfidence: 0.9 }]);
+    const controller = new VideosController({ getScores } as unknown as VideosService);
+
+    const result = await controller.scores("video-1");
+
+    expect(getScores).toHaveBeenCalledWith("video-1");
+    expect(result).toEqual([{ computedAt: "2026-11-05T12:00:00.000Z", viralScore: 72.5, scoreBreakdown: {}, dataConfidence: 0.9 }]);
+  });
 });

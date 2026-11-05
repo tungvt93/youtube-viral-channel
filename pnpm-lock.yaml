@@ -115,6 +115,9 @@ importers:
       '@yvi/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@yvi/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
       '@yvi/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -200,6 +203,10 @@ importers:
         version: 2.1.9(@types/node@22.20.5)
 
   packages/scoring:
+    dependencies:
+      '@yvi/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@yvi/config':
         specifier: workspace:*

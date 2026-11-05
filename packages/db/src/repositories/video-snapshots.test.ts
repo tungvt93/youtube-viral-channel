@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "../../generated/client";
-import { insertVideoSnapshot, listVideoSnapshots } from "./video-snapshots";
+import { insertVideoSnapshot, listRecentValidSnapshots, listVideoSnapshots } from "./video-snapshots";
 
 describe("insertVideoSnapshot", () => {
   it("creates a VideoSnapshot row with the given counts and fetch status", async () => {
@@ -43,6 +43,20 @@ describe("listVideoSnapshots", () => {
       where: { videoId: "video-1" },
       orderBy: { collectedAt: "desc" },
       take: 100,
+    });
+  });
+});
+
+describe("listRecentValidSnapshots", () => {
+  it("queries only fetchStatus ok snapshots for the whole batch, grouped-friendly ordering", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const db = { videoSnapshot: { findMany } } as unknown as PrismaClient;
+
+    await listRecentValidSnapshots(db, ["video-1", "video-2"]);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { videoId: { in: ["video-1", "video-2"] }, fetchStatus: "ok" },
+      orderBy: [{ videoId: "asc" }, { collectedAt: "desc" }],
     });
   });
 });

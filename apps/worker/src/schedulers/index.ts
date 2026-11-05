@@ -52,3 +52,22 @@ export async function registerVideoMonitoringScheduler(queues: Queues): Promise<
     { name: QUEUE_NAMES.videoMonitoring, data: {} },
   );
 }
+
+/** Fixed id for the single video-scoring tick — same single-static-id pattern as `VIDEO_MONITORING_SCHEDULER_ID` (plan Decisions). */
+export const VIDEO_SCORING_SCHEDULER_ID = "video-scoring-tick";
+
+/**
+ * Decoupled from the monitoring tick's own cadence (plan Decisions: a
+ * scoring tick re-selects whichever videos are eligible, rather than being
+ * chained off a snapshot insert) — runs independently every 15 minutes.
+ */
+const VIDEO_SCORING_TICK_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Registers the single repeatable video-scoring tick (idempotent, same as `registerVideoMonitoringScheduler`). */
+export async function registerVideoScoringScheduler(queues: Queues): Promise<void> {
+  await queues.videoScoring.upsertJobScheduler(
+    VIDEO_SCORING_SCHEDULER_ID,
+    { every: VIDEO_SCORING_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.videoScoring, data: {} },
+  );
+}

@@ -6,10 +6,17 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "build:deps": "pnpm --filter @yvi/shared run build",
+    "prebuild": "pnpm run build:deps",
+    "pretypecheck": "pnpm run build:deps",
+    "pretest": "pnpm run build:deps",
     "build": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@yvi/shared": "workspace:*"
   },
   "devDependencies": {
     "@yvi/config": "workspace:*",

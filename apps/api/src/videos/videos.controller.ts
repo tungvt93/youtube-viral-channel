@@ -10,4 +10,9 @@ export class VideosController {
   snapshots(@Param("id") id: string) {
     return this.videosService.getSnapshots(id);
   }
+
+  @Get(":id/scores")
+  scores(@Param("id") id: string) {
+    return this.videosService.getScores(id);
+  }
 }

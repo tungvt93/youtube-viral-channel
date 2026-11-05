@@ -14,6 +14,7 @@ export type {
   VideoEnrichmentCandidate,
   VideoEnrichmentJobData,
   VideoMonitoringJobData,
+  VideoScoringJobData,
 } from "./queues";
 export { computeNextSnapshotDueAt, nextMonitoringState } from "./monitoring";
 export type { MonitoringState, SnapshotOutcome } from "./monitoring";

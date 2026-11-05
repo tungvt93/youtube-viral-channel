@@ -38,3 +38,16 @@ export function listVideoSnapshots(db: PrismaClient, videoId: string, limit: num
     take: limit,
   });
 }
+
+/**
+ * All `fetchStatus: "ok"` snapshots for a batch of videos, newest first
+ * within each video — feeds a scoring tick's VPH/Acceleration computation
+ * (PRD §8.1). One query for the whole batch (grouped/sliced by the caller)
+ * instead of one query per video, avoiding N+1 for a ~200-video tick.
+ */
+export function listRecentValidSnapshots(db: PrismaClient, videoIds: string[]): Promise<VideoSnapshot[]> {
+  return db.videoSnapshot.findMany({
+    where: { videoId: { in: videoIds }, fetchStatus: "ok" },
+    orderBy: [{ videoId: "asc" }, { collectedAt: "desc" }],
+  });
+}

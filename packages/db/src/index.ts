@@ -4,6 +4,7 @@ export function packageMarker(): string {
 
 export { prisma } from "./client";
 export type { PrismaClient } from "./client";
+export type { VideoSnapshot } from "../generated/client";
 
 export { getMarketById, listEnabledMarkets } from "./repositories/markets";
 
@@ -17,14 +18,25 @@ export type { DiscoveryQueryWithMarket } from "./repositories/discovery-queries"
 export {
   getVideoById,
   getVideoByYoutubeId,
+  listChannelPeerViews,
   listVideosDueForSnapshot,
+  listVideosEligibleForScoring,
   updateVideoMonitoringState,
   upsertVideo,
 } from "./repositories/videos";
-export type { DueSnapshotVideo, UpdateVideoMonitoringStateInput, VideoUpsertInput } from "./repositories/videos";
+export type {
+  ChannelPeerView,
+  DueSnapshotVideo,
+  ScoringEligibleVideo,
+  UpdateVideoMonitoringStateInput,
+  VideoUpsertInput,
+} from "./repositories/videos";
 
-export { insertVideoSnapshot, listVideoSnapshots } from "./repositories/video-snapshots";
+export { insertVideoSnapshot, listRecentValidSnapshots, listVideoSnapshots } from "./repositories/video-snapshots";
 export type { InsertVideoSnapshotInput } from "./repositories/video-snapshots";
+
+export { insertVideoScore, listVideoScores } from "./repositories/video-scores";
+export type { InsertVideoScoreInput } from "./repositories/video-scores";
 
 export { ensureChannelStub, getChannelByYoutubeId, upsertChannel } from "./repositories/channels";
 export type { ChannelUpsertInput } from "./repositories/channels";

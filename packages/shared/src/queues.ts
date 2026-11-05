@@ -5,6 +5,7 @@ export const QUEUE_NAMES = {
   videoEnrichment: "video-enrichment",
   channelEnrichment: "channel-enrichment",
   videoMonitoring: "video-monitoring",
+  videoScoring: "video-scoring",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -53,3 +54,10 @@ export interface ChannelEnrichmentJobData {
  * re-selects whichever videos are due from the database on every tick.
  */
 export type VideoMonitoringJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoMonitoringJobData`: the
+ * scoring-tick scheduler carries no per-tick parameters — the processor
+ * re-selects whichever videos are eligible from the database on every tick.
+ */
+export type VideoScoringJobData = Record<string, never>;

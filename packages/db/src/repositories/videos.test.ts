@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "../../generated/client";
-import { getVideoById, listVideosDueForSnapshot, updateVideoMonitoringState, upsertVideo, type VideoUpsertInput } from "./videos";
+import {
+  getVideoById,
+  listChannelPeerViews,
+  listVideosDueForSnapshot,
+  listVideosEligibleForScoring,
+  updateVideoMonitoringState,
+  upsertVideo,
+  type VideoUpsertInput,
+} from "./videos";
 
 const baseInput: VideoUpsertInput = {
   youtubeVideoId: "abc123",
@@ -65,6 +73,97 @@ describe("listVideosDueForSnapshot", () => {
       take: 50,
       select: { id: true, youtubeVideoId: true, publishedAt: true, monitoringState: true, lastSnapshotAt: true },
     });
+  });
+});
+
+describe("listVideosEligibleForScoring", () => {
+  it("selects monitoring/high_signal/cooling videos oldest-snapshot-first and flattens the channel's subscriber count", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "video-1",
+        channelId: "channel-1",
+        publishedAt: new Date("2026-11-01T00:00:00Z"),
+        monitoringState: "monitoring",
+        lastSnapshotAt: new Date("2026-11-05T06:00:00Z"),
+        formatClassification: "shorts",
+        currentViewCount: 5000n,
+        channel: { currentSubscriberCount: 20000n },
+      },
+    ]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listVideosEligibleForScoring(db, 200);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { monitoringState: { in: ["monitoring", "high_signal", "cooling"] } },
+      orderBy: { lastSnapshotAt: "asc" },
+      take: 200,
+      select: {
+        id: true,
+        channelId: true,
+        publishedAt: true,
+        monitoringState: true,
+        lastSnapshotAt: true,
+        formatClassification: true,
+        currentViewCount: true,
+        channel: { select: { currentSubscriberCount: true } },
+      },
+    });
+    expect(result).toEqual([
+      {
+        id: "video-1",
+        channelId: "channel-1",
+        publishedAt: new Date("2026-11-01T00:00:00Z"),
+        monitoringState: "monitoring",
+        lastSnapshotAt: new Date("2026-11-05T06:00:00Z"),
+        formatClassification: "shorts",
+        currentViewCount: 5000n,
+        channelSubscriberCount: 20000n,
+      },
+    ]);
+  });
+
+  it("flattens a missing channel relation to a null subscriber count", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "video-1",
+        channelId: null,
+        publishedAt: new Date("2026-11-01T00:00:00Z"),
+        monitoringState: "cooling",
+        lastSnapshotAt: null,
+        formatClassification: "shorts",
+        currentViewCount: null,
+        channel: null,
+      },
+    ]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listVideosEligibleForScoring(db, 200);
+
+    expect(result[0].channelSubscriberCount).toBeNull();
+  });
+});
+
+describe("listChannelPeerViews", () => {
+  it("selects a channel's most-recent videos with a known view count", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { id: "video-2", currentViewCount: 9000n },
+      { id: "video-3", currentViewCount: 8000n },
+    ]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listChannelPeerViews(db, "channel-1", 21);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { channelId: "channel-1", currentViewCount: { not: null } },
+      orderBy: { publishedAt: "desc" },
+      take: 21,
+      select: { id: true, currentViewCount: true },
+    });
+    expect(result).toEqual([
+      { videoId: "video-2", currentViewCount: 9000n },
+      { videoId: "video-3", currentViewCount: 8000n },
+    ]);
   });
 });
 

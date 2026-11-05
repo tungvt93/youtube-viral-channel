@@ -5,7 +5,14 @@ const { listEnabledDiscoveryQueriesWithMarket } = vi.hoisted(() => ({
 }));
 vi.mock("@yvi/db", () => ({ listEnabledDiscoveryQueriesWithMarket }));
 
-import { packageMarker, registerDiscoverySchedulers, registerVideoMonitoringScheduler, VIDEO_MONITORING_SCHEDULER_ID } from "./index";
+import {
+  packageMarker,
+  registerDiscoverySchedulers,
+  registerVideoMonitoringScheduler,
+  registerVideoScoringScheduler,
+  VIDEO_MONITORING_SCHEDULER_ID,
+  VIDEO_SCORING_SCHEDULER_ID,
+} from "./index";
 
 describe("schedulers scaffold", () => {
   it("identifies the module", () => {
@@ -50,6 +57,24 @@ describe("registerVideoMonitoringScheduler", () => {
     expect(videoMonitoring.upsertJobScheduler).toHaveBeenCalledTimes(1);
     expect(videoMonitoring.upsertJobScheduler).toHaveBeenCalledWith(
       VIDEO_MONITORING_SCHEDULER_ID,
+      { every: 15 * 60 * 1000 },
+      expect.objectContaining({ data: {} }),
+    );
+  });
+});
+
+describe("registerVideoScoringScheduler", () => {
+  it("registers exactly one repeatable scheduler under a single static, colon-free id, decoupled from the monitoring tick", async () => {
+    const videoScoring = { upsertJobScheduler: vi.fn().mockResolvedValue(undefined) };
+    const queues = { videoScoring };
+
+    await registerVideoScoringScheduler(queues as never);
+
+    expect(VIDEO_SCORING_SCHEDULER_ID).not.toContain(":");
+    expect(VIDEO_SCORING_SCHEDULER_ID).not.toBe(VIDEO_MONITORING_SCHEDULER_ID);
+    expect(videoScoring.upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(videoScoring.upsertJobScheduler).toHaveBeenCalledWith(
+      VIDEO_SCORING_SCHEDULER_ID,
       { every: 15 * 60 * 1000 },
       expect.objectContaining({ data: {} }),
     );
