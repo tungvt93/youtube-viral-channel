@@ -56,7 +56,7 @@ describe("createDiscoveryRegionalProcessor", () => {
       }),
     };
     const queues = { videoEnrichment: {} } as unknown as Queues;
-    const deps = { db: {} as never, youtube: youtube as never, queues, logger: logger as never, now: () => new Date("2026-11-05T00:00:00Z") };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: youtube as never, queues, logger: logger as never, now: () => new Date("2026-11-05T00:00:00Z") };
 
     const processor = createDiscoveryRegionalProcessor(deps);
     const result = await processor(makeJob());
@@ -90,7 +90,7 @@ describe("createDiscoveryRegionalProcessor", () => {
     checkQuotaGuard.mockResolvedValue({ allowed: false, remaining: 0, projectedUsage: 10001 });
     const logger = makeLogger();
     const youtube = { listMostPopularVideos: vi.fn() };
-    const deps = { db: {} as never, youtube: youtube as never, queues: {} as never, logger: logger as never };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: youtube as never, queues: {} as never, logger: logger as never };
 
     const processor = createDiscoveryRegionalProcessor(deps);
     const result = await processor(makeJob());
@@ -111,7 +111,7 @@ describe("createDiscoveryRegionalProcessor", () => {
       market: { id: "market-1", code: "US", enabled: true },
     });
     const logger = makeLogger();
-    const deps = { db: {} as never, youtube: {} as never, queues: {} as never, logger: logger as never };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: {} as never, queues: {} as never, logger: logger as never };
 
     const processor = createDiscoveryRegionalProcessor(deps);
     const result = await processor(makeJob());

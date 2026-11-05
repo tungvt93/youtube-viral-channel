@@ -12,3 +12,6 @@ export { createVideoMonitoringProcessor } from "./video-monitoring";
 export { createVideoScoringProcessor } from "./video-scoring";
 export { createChannelVideoDiscoveryProcessor } from "./channel-video-discovery";
 export { createChannelScoringProcessor } from "./channel-scoring";
+export { createVideoClassificationProcessor } from "./video-classification";
+export { createTopicNormalizationProcessor } from "./topic-normalization";
+export { createTopicTrendAggregationProcessor } from "./topic-trend-aggregation";

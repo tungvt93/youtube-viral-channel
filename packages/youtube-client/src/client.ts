@@ -66,6 +66,7 @@ interface RawVideosResponse {
       defaultLanguage?: string;
       thumbnails?: { high?: { url?: string }; default?: { url?: string } };
       liveBroadcastContent?: string;
+      tags?: string[];
     };
     contentDetails?: { duration?: string };
     statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
@@ -131,6 +132,7 @@ function mapVideoItem(item: NonNullable<RawVideosResponse["items"]>[number]): Vi
     thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.default?.url,
     embedWidth: embed.width,
     embedHeight: embed.height,
+    tags: item.snippet?.tags,
   };
 }
 

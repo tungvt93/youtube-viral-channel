@@ -55,7 +55,7 @@ describe("createChannelVideoDiscoveryProcessor", () => {
 
   it("does nothing and completes the JobRun when no channel is due", async () => {
     listChannelsDueForVideoDiscovery.mockResolvedValue([]);
-    const deps = { db: {} as never, youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createChannelVideoDiscoveryProcessor(deps)(makeJob());
 
@@ -69,7 +69,7 @@ describe("createChannelVideoDiscoveryProcessor", () => {
     ]);
     checkQuotaGuard.mockResolvedValue({ allowed: false, remaining: 0, projectedUsage: 10001 });
     const listPlaylistItems = vi.fn();
-    const deps = { db: {} as never, youtube: { listPlaylistItems } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listPlaylistItems } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createChannelVideoDiscoveryProcessor(deps)(makeJob());
 
@@ -92,7 +92,7 @@ describe("createChannelVideoDiscoveryProcessor", () => {
     });
     listKnownYoutubeVideoIds.mockResolvedValue(new Set(["vid-old"]));
     const queues = { videoEnrichment: {} } as unknown as Queues;
-    const deps = { db: {} as never, youtube: { listPlaylistItems } as never, queues, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listPlaylistItems } as never, queues, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createChannelVideoDiscoveryProcessor(deps)(makeJob());
 
@@ -126,7 +126,7 @@ describe("createChannelVideoDiscoveryProcessor", () => {
     });
     listKnownYoutubeVideoIds.mockResolvedValue(new Set(["vid-old"]));
     const queues = { videoEnrichment: {} } as unknown as Queues;
-    const deps = { db: {} as never, youtube: { listPlaylistItems } as never, queues, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listPlaylistItems } as never, queues, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createChannelVideoDiscoveryProcessor(deps)(makeJob());
 
@@ -147,7 +147,7 @@ describe("createChannelVideoDiscoveryProcessor", () => {
       .mockResolvedValueOnce({ items: [], nextPageToken: undefined });
     listKnownYoutubeVideoIds.mockResolvedValue(new Set());
     const queues = { videoEnrichment: {} } as unknown as Queues;
-    const deps = { db: {} as never, youtube: { listPlaylistItems } as never, queues, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listPlaylistItems } as never, queues, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createChannelVideoDiscoveryProcessor(deps)(makeJob());
 

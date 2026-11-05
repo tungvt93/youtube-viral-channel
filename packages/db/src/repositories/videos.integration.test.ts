@@ -39,6 +39,7 @@ describe.runIf(runIntegration)("videos repository (integration)", () => {
     liveBroadcastContent: "none",
     formatClassification: "short_candidate",
     formatConfidence: 0.9,
+    tags: ["tag1", "tag2"],
   };
 
   it("creates a video row and reads it back with correct types", async () => {

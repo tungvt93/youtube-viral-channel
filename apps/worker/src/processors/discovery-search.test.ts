@@ -52,7 +52,7 @@ describe("createDiscoverySearchProcessor", () => {
     const logger = makeLogger();
     const search = vi.fn().mockResolvedValue({ items: [{ videoId: "v1" }], nextPageToken: undefined });
     const queues = { videoEnrichment: {} } as unknown as Queues;
-    const deps = { db: {} as never, youtube: { search } as never, queues, logger: logger as never, now: () => new Date("2026-11-05T00:00:00Z") };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { search } as never, queues, logger: logger as never, now: () => new Date("2026-11-05T00:00:00Z") };
 
     const processor = createDiscoverySearchProcessor(deps);
     const result = await processor(makeJob());
@@ -83,7 +83,7 @@ describe("createDiscoverySearchProcessor", () => {
     checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9900, projectedUsage: 100 });
     const logger = makeLogger();
     const search = vi.fn().mockRejectedValue(new Error("boom"));
-    const deps = { db: {} as never, youtube: { search } as never, queues: {} as never, logger: logger as never };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { search } as never, queues: {} as never, logger: logger as never };
 
     const processor = createDiscoverySearchProcessor(deps);
 

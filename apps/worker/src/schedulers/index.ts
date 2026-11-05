@@ -101,3 +101,48 @@ export async function registerChannelScoringScheduler(queues: Queues): Promise<v
     { name: QUEUE_NAMES.channelScoring, data: {} },
   );
 }
+
+/** Fixed id for the single video-classification tick — same single-static-id pattern as `VIDEO_SCORING_SCHEDULER_ID` (plan Decisions). */
+export const VIDEO_CLASSIFICATION_SCHEDULER_ID = "video-classification-tick";
+
+/** Task-local: same 15-minute cadence as the other bounded-batch ticks (`VIDEO_SCORING_TICK_INTERVAL_MS`) — the tick's own `MAX_VIDEOS_PER_TICK` cap and AI-budget guard bound cost per run, not the interval. */
+const VIDEO_CLASSIFICATION_TICK_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Registers the single repeatable video-classification tick (idempotent, same as `registerVideoScoringScheduler`). */
+export async function registerVideoClassificationScheduler(queues: Queues): Promise<void> {
+  await queues.videoClassification.upsertJobScheduler(
+    VIDEO_CLASSIFICATION_SCHEDULER_ID,
+    { every: VIDEO_CLASSIFICATION_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.videoClassification, data: {} },
+  );
+}
+
+/** Fixed id for the single topic-normalization tick — same single-static-id pattern as `VIDEO_SCORING_SCHEDULER_ID` (plan Decisions). */
+export const TOPIC_NORMALIZATION_SCHEDULER_ID = "topic-normalization-tick";
+
+/** Task-local: plan calls this tick "lower frequency" than classification without naming a number — four hours, since candidate topics accumulate slowly and a batched normalization call is relatively expensive AI spend. */
+const TOPIC_NORMALIZATION_TICK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+/** Registers the single repeatable topic-normalization tick (idempotent, same as `registerVideoScoringScheduler`). */
+export async function registerTopicNormalizationScheduler(queues: Queues): Promise<void> {
+  await queues.topicNormalization.upsertJobScheduler(
+    TOPIC_NORMALIZATION_SCHEDULER_ID,
+    { every: TOPIC_NORMALIZATION_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.topicNormalization, data: {} },
+  );
+}
+
+/** Fixed id for the single topic-trend-aggregation tick — same single-static-id pattern as `VIDEO_SCORING_SCHEDULER_ID` (plan Decisions). */
+export const TOPIC_TREND_AGGREGATION_SCHEDULER_ID = "topic-trend-aggregation-tick";
+
+/** PRD §10.5-driven plan Approach: daily, matching the tick's own trailing 7-day window. */
+const TOPIC_TREND_AGGREGATION_TICK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** Registers the single repeatable topic-trend-aggregation tick (idempotent, same as `registerVideoScoringScheduler`). */
+export async function registerTopicTrendAggregationScheduler(queues: Queues): Promise<void> {
+  await queues.topicTrendAggregation.upsertJobScheduler(
+    TOPIC_TREND_AGGREGATION_SCHEDULER_ID,
+    { every: TOPIC_TREND_AGGREGATION_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.topicTrendAggregation, data: {} },
+  );
+}

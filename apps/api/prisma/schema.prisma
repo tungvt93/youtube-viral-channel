@@ -91,6 +91,9 @@ model Video {
   lastSnapshotAt        DateTime? @map("last_snapshot_at")
   nextSnapshotDueAt     DateTime @default(now()) @map("next_snapshot_due_at")
 
+  /// Raw snippet.tags strings from videos.list (PRD §10 topic classification input) — free text, not yet matched to Topic rows.
+  tags                  String[] @default([])
+
   channel               Channel? @relation(fields: [channelId], references: [id])
   discoveryEvents       DiscoveryEvent[]
   videoSnapshots        VideoSnapshot[]
@@ -284,6 +287,10 @@ model TrendSnapshot {
   outlierVideoCount    Int      @map("outlier_video_count")
   momentumScore        Decimal  @map("momentum_score") @db.Decimal(5, 2)
   sampleConfidence     Decimal  @map("sample_confidence") @db.Decimal(5, 4)
+  /// Per-component breakdown of momentumScore, same shape as ChannelScore.scoreBreakdown (PRD §10.6).
+  scoreBreakdown       Json?    @map("score_breakdown")
+  /// PRD §10.7 lifecycle state machine output: candidate/emerging/accelerating/trending/peaking/declining.
+  lifecycleState       String   @default("candidate") @map("lifecycle_state") @db.VarChar(20)
   createdAt            DateTime @default(now()) @map("created_at")
 
   market               Market   @relation(fields: [marketId], references: [id])

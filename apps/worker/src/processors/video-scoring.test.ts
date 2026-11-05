@@ -45,7 +45,7 @@ const NOW = new Date("2026-11-05T12:00:00Z");
 const PUBLISHED_AT = new Date("2026-11-03T12:00:00Z"); // 2 days old -> "1-3d" age bucket
 
 function makeDeps() {
-  return { db: {} as never, youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+  return { db: {} as never, ai: {} as never, aiModel: "unused", youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 }
 
 function baseVideo(id: string, overrides: Record<string, unknown> = {}) {

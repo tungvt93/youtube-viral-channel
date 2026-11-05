@@ -42,7 +42,7 @@ describe("createChannelEnrichmentProcessor", () => {
     });
     const logger = makeLogger();
     const deps = {
-      db: {} as never,
+      db: {} as never, ai: {} as never, aiModel: "unused",
       youtube: { listChannelsByIds } as never,
       queues: {} as never,
       logger: logger as never,
@@ -68,7 +68,7 @@ describe("createChannelEnrichmentProcessor", () => {
     checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9999, projectedUsage: 1 });
     const listChannelsByIds = vi.fn().mockRejectedValue(new Error("network down"));
     const logger = makeLogger();
-    const deps = { db: {} as never, youtube: { listChannelsByIds } as never, queues: {} as never, logger: logger as never };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listChannelsByIds } as never, queues: {} as never, logger: logger as never };
 
     const processor = createChannelEnrichmentProcessor(deps);
 

@@ -5,7 +5,9 @@ import {
   listChannelPeerViews,
   listKnownYoutubeVideoIds,
   listVideosDueForSnapshot,
+  listVideosEligibleForClassification,
   listVideosEligibleForScoring,
+  updateVideoClassification,
   updateVideoMonitoringState,
   upsertVideo,
   type VideoUpsertInput,
@@ -30,6 +32,7 @@ const baseInput: VideoUpsertInput = {
   liveBroadcastContent: "none",
   formatClassification: "short_candidate",
   formatConfidence: 0.9,
+  tags: ["tag1", "tag2"],
 };
 
 describe("upsertVideo", () => {
@@ -190,6 +193,75 @@ describe("listKnownYoutubeVideoIds", () => {
 
     expect(findMany).not.toHaveBeenCalled();
     expect(result).toEqual(new Set());
+  });
+});
+
+describe("listVideosEligibleForClassification", () => {
+  it("selects videos with no successful classification run, oldest-discovered first, flattening the channel", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "video-1",
+        title: "Title",
+        description: "Desc",
+        tags: ["a", "b"],
+        categoryId: "22",
+        channel: { title: "Channel", description: "Channel bio" },
+      },
+    ]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listVideosEligibleForClassification(db, 25);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { aiClassificationRuns: { none: { status: "success" } } },
+      orderBy: { firstDiscoveredAt: "asc" },
+      take: 25,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        tags: true,
+        categoryId: true,
+        channel: { select: { title: true, description: true } },
+      },
+    });
+    expect(result).toEqual([
+      {
+        id: "video-1",
+        title: "Title",
+        description: "Desc",
+        tags: ["a", "b"],
+        categoryId: "22",
+        channelTitle: "Channel",
+        channelDescription: "Channel bio",
+      },
+    ]);
+  });
+
+  it("flattens a missing channel to empty title/description", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { id: "video-1", title: "T", description: "D", tags: [], categoryId: "22", channel: null },
+    ]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+
+    const result = await listVideosEligibleForClassification(db, 25);
+
+    expect(result[0].channelTitle).toBe("");
+    expect(result[0].channelDescription).toBe("");
+  });
+});
+
+describe("updateVideoClassification", () => {
+  it("writes formatClassification/formatConfidence for the given video id", async () => {
+    const update = vi.fn().mockResolvedValue({ id: "video-1" });
+    const db = { video: { update } } as unknown as PrismaClient;
+
+    await updateVideoClassification(db, "video-1", "tutorial", 0.87);
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "video-1" },
+      data: { formatClassification: "tutorial", formatConfidence: 0.87 },
+    });
   });
 });
 

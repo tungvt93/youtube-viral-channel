@@ -51,7 +51,7 @@ describe("createVideoMonitoringProcessor", () => {
   it("does nothing and completes the JobRun when no video is due", async () => {
     startJobRun.mockResolvedValue({ id: "tick-1" });
     listVideosDueForSnapshot.mockResolvedValue([]);
-    const deps = { db: {} as never, youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createVideoMonitoringProcessor(deps)(makeJob());
 
@@ -66,7 +66,7 @@ describe("createVideoMonitoringProcessor", () => {
     ]);
     checkQuotaGuard.mockResolvedValue({ allowed: false, remaining: 0, projectedUsage: 10001 });
     const listVideosByIds = vi.fn();
-    const deps = { db: {} as never, youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createVideoMonitoringProcessor(deps)(makeJob());
 
@@ -85,7 +85,7 @@ describe("createVideoMonitoringProcessor", () => {
       callsMade: 1,
       items: [{ videoId: "yt1", viewCount: 5000, likeCount: 100, commentCount: 10 }],
     });
-    const deps = { db: {} as never, youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createVideoMonitoringProcessor(deps)(makeJob());
 
@@ -112,7 +112,7 @@ describe("createVideoMonitoringProcessor", () => {
       callsMade: 1,
       items: [{ videoId: "yt1", viewCount: 400 }],
     });
-    const deps = { db: {} as never, youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     await createVideoMonitoringProcessor(deps)(makeJob());
 
@@ -129,7 +129,7 @@ describe("createVideoMonitoringProcessor", () => {
     ]);
     checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9999, projectedUsage: 1 });
     const listVideosByIds = vi.fn().mockResolvedValue({ callsMade: 1, items: [] });
-    const deps = { db: {} as never, youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     const result = await createVideoMonitoringProcessor(deps)(makeJob());
 
@@ -145,7 +145,7 @@ describe("createVideoMonitoringProcessor", () => {
     ]);
     checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9999, projectedUsage: 1 });
     const listVideosByIds = vi.fn().mockRejectedValue(new Error("boom"));
-    const deps = { db: {} as never, youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 
     await expect(createVideoMonitoringProcessor(deps)(makeJob())).rejects.toThrow("boom");
 

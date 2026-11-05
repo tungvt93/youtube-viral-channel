@@ -42,3 +42,19 @@ export {
   nextChannelTier,
 } from "./channel-tier";
 export type { ChannelTier, ChannelTierInput } from "./channel-tier";
+
+export { computeTopicMomentum, sampleConfidenceFromVideoCount } from "./topic-momentum";
+export type { TopicMomentumBreakdownEntry, TopicMomentumComponents, TopicMomentumResult } from "./topic-momentum";
+
+export { TOPIC_OUTLIER_VPH_MULTIPLIER, computeVphSincePublish, summarizeTopicVph } from "./topic-metrics";
+export type { TopicVphSummary } from "./topic-metrics";
+
+export {
+  TOPIC_LIFECYCLE_ACCELERATING_SCORE,
+  TOPIC_LIFECYCLE_EMERGING_SCORE,
+  TOPIC_LIFECYCLE_MIN_SAMPLE_CONFIDENCE,
+  TOPIC_LIFECYCLE_PEAKING_SCORE,
+  TOPIC_LIFECYCLE_TRENDING_SCORE,
+  nextTopicLifecycleState,
+} from "./topic-lifecycle";
+export type { TopicLifecycleInput, TopicLifecycleState } from "./topic-lifecycle";

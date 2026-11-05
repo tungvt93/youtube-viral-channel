@@ -104,6 +104,7 @@ export function createVideoEnrichmentProcessor(deps: ProcessorDeps) {
           liveBroadcastContent: video.liveBroadcastContent ?? null,
           formatClassification: classification.classification,
           formatConfidence: classification.confidence,
+          tags: video.tags ?? [],
         });
 
         await createDiscoveryEvent(deps.db, {

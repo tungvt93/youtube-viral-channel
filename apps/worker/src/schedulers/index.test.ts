@@ -8,8 +8,14 @@ vi.mock("@yvi/db", () => ({ listEnabledDiscoveryQueriesWithMarket }));
 import {
   packageMarker,
   registerDiscoverySchedulers,
+  registerTopicNormalizationScheduler,
+  registerTopicTrendAggregationScheduler,
+  registerVideoClassificationScheduler,
   registerVideoMonitoringScheduler,
   registerVideoScoringScheduler,
+  TOPIC_NORMALIZATION_SCHEDULER_ID,
+  TOPIC_TREND_AGGREGATION_SCHEDULER_ID,
+  VIDEO_CLASSIFICATION_SCHEDULER_ID,
   VIDEO_MONITORING_SCHEDULER_ID,
   VIDEO_SCORING_SCHEDULER_ID,
 } from "./index";
@@ -76,6 +82,57 @@ describe("registerVideoScoringScheduler", () => {
     expect(videoScoring.upsertJobScheduler).toHaveBeenCalledWith(
       VIDEO_SCORING_SCHEDULER_ID,
       { every: 15 * 60 * 1000 },
+      expect.objectContaining({ data: {} }),
+    );
+  });
+});
+
+describe("registerVideoClassificationScheduler", () => {
+  it("registers exactly one repeatable scheduler under a single static, colon-free id", async () => {
+    const videoClassification = { upsertJobScheduler: vi.fn().mockResolvedValue(undefined) };
+    const queues = { videoClassification };
+
+    await registerVideoClassificationScheduler(queues as never);
+
+    expect(VIDEO_CLASSIFICATION_SCHEDULER_ID).not.toContain(":");
+    expect(videoClassification.upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(videoClassification.upsertJobScheduler).toHaveBeenCalledWith(
+      VIDEO_CLASSIFICATION_SCHEDULER_ID,
+      { every: 15 * 60 * 1000 },
+      expect.objectContaining({ data: {} }),
+    );
+  });
+});
+
+describe("registerTopicNormalizationScheduler", () => {
+  it("registers exactly one repeatable scheduler under a single static, colon-free id, at a lower-than-classification frequency", async () => {
+    const topicNormalization = { upsertJobScheduler: vi.fn().mockResolvedValue(undefined) };
+    const queues = { topicNormalization };
+
+    await registerTopicNormalizationScheduler(queues as never);
+
+    expect(TOPIC_NORMALIZATION_SCHEDULER_ID).not.toContain(":");
+    expect(topicNormalization.upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(topicNormalization.upsertJobScheduler).toHaveBeenCalledWith(
+      TOPIC_NORMALIZATION_SCHEDULER_ID,
+      { every: 4 * 60 * 60 * 1000 },
+      expect.objectContaining({ data: {} }),
+    );
+  });
+});
+
+describe("registerTopicTrendAggregationScheduler", () => {
+  it("registers exactly one repeatable scheduler under a single static, colon-free id, on a daily cadence", async () => {
+    const topicTrendAggregation = { upsertJobScheduler: vi.fn().mockResolvedValue(undefined) };
+    const queues = { topicTrendAggregation };
+
+    await registerTopicTrendAggregationScheduler(queues as never);
+
+    expect(TOPIC_TREND_AGGREGATION_SCHEDULER_ID).not.toContain(":");
+    expect(topicTrendAggregation.upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(topicTrendAggregation.upsertJobScheduler).toHaveBeenCalledWith(
+      TOPIC_TREND_AGGREGATION_SCHEDULER_ID,
+      { every: 24 * 60 * 60 * 1000 },
       expect.objectContaining({ data: {} }),
     );
   });

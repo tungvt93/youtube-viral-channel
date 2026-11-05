@@ -70,7 +70,7 @@ describe("createVideoEnrichmentProcessor", () => {
     const logger = makeLogger();
     const queues = { channelEnrichment: {} } as unknown as Queues;
     const deps = {
-      db: {} as never,
+      db: {} as never, ai: {} as never, aiModel: "unused",
       youtube: { listVideosByIds } as never,
       queues,
       logger: logger as never,
@@ -105,7 +105,7 @@ describe("createVideoEnrichmentProcessor", () => {
     checkQuotaGuard.mockResolvedValue({ allowed: false, remaining: 0, projectedUsage: 10001 });
     const listVideosByIds = vi.fn();
     const logger = makeLogger();
-    const deps = { db: {} as never, youtube: { listVideosByIds } as never, queues: {} as never, logger: logger as never };
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: logger as never };
 
     const processor = createVideoEnrichmentProcessor(deps);
     const result = await processor(makeJob([{ videoId: "v1", sourceRank: 0 }]));

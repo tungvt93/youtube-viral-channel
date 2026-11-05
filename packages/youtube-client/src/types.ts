@@ -51,6 +51,8 @@ export interface VideoResourceItem {
   /** Parsed from the `player` part's embedHtml, when requested. */
   embedWidth?: number | null;
   embedHeight?: number | null;
+  /** `snippet.tags` (PRD §10 topic classification input) — creator-supplied free text, absent when the creator set none. */
+  tags?: string[];
 }
 
 export interface VideosListResult {

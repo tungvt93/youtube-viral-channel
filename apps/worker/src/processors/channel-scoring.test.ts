@@ -47,7 +47,7 @@ function makeJob(): Job<ChannelScoringJobData> {
 const NOW = new Date("2026-11-05T12:00:00Z");
 
 function makeDeps() {
-  return { db: {} as never, youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
+  return { db: {} as never, ai: {} as never, aiModel: "unused", youtube: {} as never, queues: {} as never, logger: makeLogger() as never, now: () => NOW };
 }
 
 function baseChannel(id: string, overrides: Record<string, unknown> = {}) {

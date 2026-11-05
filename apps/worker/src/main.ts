@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import { prisma } from "@yvi/db";
 import { YouTubeClient } from "@yvi/youtube-client";
+import { DEFAULT_GEMINI_MODEL, GeminiProvider } from "@yvi/ai-client";
 import { QUEUE_NAMES } from "@yvi/shared";
 import { logger } from "./common/logger";
 import { createRedisConnection } from "./redis";
@@ -12,6 +13,9 @@ import {
   createChannelVideoDiscoveryProcessor,
   createDiscoveryRegionalProcessor,
   createDiscoverySearchProcessor,
+  createTopicNormalizationProcessor,
+  createTopicTrendAggregationProcessor,
+  createVideoClassificationProcessor,
   createVideoEnrichmentProcessor,
   createVideoMonitoringProcessor,
   createVideoScoringProcessor,
@@ -21,6 +25,9 @@ import {
   registerChannelScoringScheduler,
   registerChannelVideoDiscoveryScheduler,
   registerDiscoverySchedulers,
+  registerTopicNormalizationScheduler,
+  registerTopicTrendAggregationScheduler,
+  registerVideoClassificationScheduler,
   registerVideoMonitoringScheduler,
   registerVideoScoringScheduler,
 } from "./schedulers/index";
@@ -30,11 +37,18 @@ if (!apiKey) {
   logger.warn("YOUTUBE_API_KEY is not set — discovery/enrichment jobs will fail until it is configured");
 }
 
+const geminiApiKey = process.env.GEMINI_API_KEY;
+if (!geminiApiKey) {
+  logger.warn("GEMINI_API_KEY is not set — video-classification/topic-normalization jobs will fail until it is configured");
+}
+const aiModel = process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL;
+
 const connection = createRedisConnection();
 const queues = createQueues(connection);
 const youtube = new YouTubeClient({ apiKey: apiKey ?? "" });
+const ai = new GeminiProvider({ apiKey: geminiApiKey ?? "", model: aiModel });
 
-const deps: ProcessorDeps = { db: prisma, youtube, queues, logger };
+const deps: ProcessorDeps = { db: prisma, youtube, ai, aiModel, queues, logger };
 
 const workers = [
   new Worker(QUEUE_NAMES.discoveryRegional, createDiscoveryRegionalProcessor(deps), { connection }),
@@ -45,6 +59,9 @@ const workers = [
   new Worker(QUEUE_NAMES.videoScoring, createVideoScoringProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.channelVideoDiscovery, createChannelVideoDiscoveryProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.channelScoring, createChannelScoringProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.videoClassification, createVideoClassificationProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.topicNormalization, createTopicNormalizationProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.topicTrendAggregation, createTopicTrendAggregationProcessor(deps), { connection }),
 ];
 
 for (const worker of workers) {
@@ -76,8 +93,20 @@ registerChannelScoringScheduler(queues)
   .then(() => logger.info("registered channel-scoring scheduler"))
   .catch((error) => logger.error({ status: "error" }, `failed to register channel-scoring scheduler: ${String(error)}`));
 
+registerVideoClassificationScheduler(queues)
+  .then(() => logger.info("registered video-classification scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register video-classification scheduler: ${String(error)}`));
+
+registerTopicNormalizationScheduler(queues)
+  .then(() => logger.info("registered topic-normalization scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register topic-normalization scheduler: ${String(error)}`));
+
+registerTopicTrendAggregationScheduler(queues)
+  .then(() => logger.info("registered topic-trend-aggregation scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register topic-trend-aggregation scheduler: ${String(error)}`));
+
 logger.info(
-  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring",
+  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation",
 );
 
 async function shutdown(): Promise<void> {

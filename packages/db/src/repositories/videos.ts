@@ -19,6 +19,7 @@ export interface VideoUpsertInput {
   liveBroadcastContent: string | null;
   formatClassification: string;
   formatConfidence: number;
+  tags: string[];
 }
 
 /**
@@ -46,6 +47,7 @@ export function upsertVideo(db: PrismaClient, input: VideoUpsertInput): Promise<
     liveBroadcastContent: input.liveBroadcastContent,
     formatClassification: input.formatClassification,
     formatConfidence: input.formatConfidence,
+    tags: input.tags,
     lastEnrichedAt: new Date(),
   };
   return db.video.upsert({
@@ -172,6 +174,68 @@ export function listVideosEligibleForScoring(db: PrismaClient, limit: number): P
         channelSubscriberCount: row.channel?.currentSubscriberCount ?? null,
       })),
     );
+}
+
+export interface ClassificationEligibleVideo {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  categoryId: string;
+  channelTitle: string;
+  channelDescription: string;
+}
+
+/**
+ * Candidate pool for a video-classification tick (PRD §10/§19.3): videos
+ * with zero successful `ai_classification_runs` row yet. First cut only —
+ * re-classification after a video's metadata changes is explicitly out of
+ * scope for this phase (see plan "Out of scope"), so a video with any
+ * `status = "success"` run is permanently skipped here, not re-queued.
+ * Ordered oldest-discovered-first so the backlog drains in FIFO order.
+ */
+export function listVideosEligibleForClassification(
+  db: PrismaClient,
+  limit: number,
+): Promise<ClassificationEligibleVideo[]> {
+  return db.video
+    .findMany({
+      where: { aiClassificationRuns: { none: { status: "success" } } },
+      orderBy: { firstDiscoveredAt: "asc" },
+      take: limit,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        tags: true,
+        categoryId: true,
+        channel: { select: { title: true, description: true } },
+      },
+    })
+    .then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        tags: row.tags,
+        categoryId: row.categoryId,
+        channelTitle: row.channel?.title ?? "",
+        channelDescription: row.channel?.description ?? "",
+      })),
+    );
+}
+
+/** Applies a successful AI classification's `format`/`confidence` onto the video row (PRD §10: AI classification supersedes the heuristic `classifyFormat` guess once available). */
+export function updateVideoClassification(
+  db: PrismaClient,
+  videoId: string,
+  formatClassification: string,
+  formatConfidence: number,
+): Promise<Video> {
+  return db.video.update({
+    where: { id: videoId },
+    data: { formatClassification, formatConfidence },
+  });
 }
 
 export interface ChannelPeerView {

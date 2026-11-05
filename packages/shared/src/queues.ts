@@ -8,6 +8,9 @@ export const QUEUE_NAMES = {
   videoScoring: "video-scoring",
   channelVideoDiscovery: "channel-video-discovery",
   channelScoring: "channel-scoring",
+  videoClassification: "video-classification",
+  topicNormalization: "topic-normalization",
+  topicTrendAggregation: "topic-trend-aggregation",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -78,3 +81,26 @@ export type ChannelVideoDiscoveryJobData = Record<string, never>;
  * database on every tick.
  */
 export type ChannelScoringJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoScoringJobData`: the
+ * video-classification tick re-selects whichever videos have no successful
+ * `ai_classification_runs` row yet from the database on every tick (PRD
+ * §10/§19.3).
+ */
+export type VideoClassificationJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoScoringJobData`: the
+ * topic-normalization tick re-selects whichever topics are currently
+ * `status = "candidate"` from the database on every tick.
+ */
+export type TopicNormalizationJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoScoringJobData`: the
+ * topic-trend-aggregation tick re-selects whichever (market, topic) pairs
+ * have at least one observed video in the trailing window on every tick
+ * (PRD §10.5).
+ */
+export type TopicTrendAggregationJobData = Record<string, never>;

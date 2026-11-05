@@ -21,12 +21,15 @@ export {
   listChannelPeerViews,
   listKnownYoutubeVideoIds,
   listVideosDueForSnapshot,
+  listVideosEligibleForClassification,
   listVideosEligibleForScoring,
+  updateVideoClassification,
   updateVideoMonitoringState,
   upsertVideo,
 } from "./repositories/videos";
 export type {
   ChannelPeerView,
+  ClassificationEligibleVideo,
   DueSnapshotVideo,
   ScoringEligibleVideo,
   UpdateVideoMonitoringStateInput,
@@ -73,4 +76,33 @@ export type { FinishJobRunInput, StartJobRunInput } from "./repositories/job-run
 export { recordApiUsage, sumTodayQuotaUsage } from "./repositories/api-usage";
 export type { RecordApiUsageInput } from "./repositories/api-usage";
 
-export { getDailyBudget } from "./repositories/app-settings";
+export { getAiDailyBudget, getDailyBudget } from "./repositories/app-settings";
+
+export { recordAiClassificationRun, sumTodayAiUsage } from "./repositories/ai-classification-runs";
+export type { RecordAiClassificationRunInput } from "./repositories/ai-classification-runs";
+
+export {
+  applyTopicMerge,
+  applyTopicPromotion,
+  findTopicBySlug,
+  getOrCreateCandidateTopic,
+  getTopicById,
+  listCandidateTopicsForNormalization,
+  listTopics,
+  slugifyTopicLabel,
+  upsertVideoTopic,
+} from "./repositories/topics";
+export type {
+  NormalizationCandidateRow,
+  TopicListFilter,
+  TopicListRow,
+  UpsertVideoTopicInput,
+} from "./repositories/topics";
+
+export {
+  getLatestTrendSnapshot,
+  listObservedTopicVideos,
+  listTrendSnapshotsForTopic,
+  upsertTrendSnapshot,
+} from "./repositories/trend-snapshots";
+export type { ObservedTopicVideoRow, UpsertTrendSnapshotInput } from "./repositories/trend-snapshots";

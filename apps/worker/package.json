@@ -4,7 +4,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build:deps": "pnpm --filter @yvi/shared --filter @yvi/youtube-client --filter @yvi/db --filter @yvi/scoring run build",
+    "build:deps": "pnpm --filter @yvi/shared --filter @yvi/youtube-client --filter @yvi/ai-client --filter @yvi/db --filter @yvi/scoring run build",
     "prebuild": "pnpm run build:deps",
     "pretypecheck": "pnpm run build:deps",
     "pretest": "pnpm run build:deps",
@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@yvi/ai-client": "workspace:*",
     "@yvi/db": "workspace:*",
     "@yvi/scoring": "workspace:*",
     "@yvi/shared": "workspace:*",
