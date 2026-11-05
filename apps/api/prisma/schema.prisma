@@ -87,6 +87,10 @@ model Video {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
+  monitoringState       String   @default("candidate") @map("monitoring_state") @db.VarChar(20)
+  lastSnapshotAt        DateTime? @map("last_snapshot_at")
+  nextSnapshotDueAt     DateTime @default(now()) @map("next_snapshot_due_at")
+
   channel               Channel? @relation(fields: [channelId], references: [id])
   discoveryEvents       DiscoveryEvent[]
   videoSnapshots        VideoSnapshot[]
@@ -97,6 +101,7 @@ model Video {
   @@index([publishedAt(sort: Desc)])
   @@index([currentViewCount(sort: Desc)])
   @@index([channelId, publishedAt(sort: Desc)])
+  @@index([monitoringState, nextSnapshotDueAt])
   @@map("videos")
 }
 

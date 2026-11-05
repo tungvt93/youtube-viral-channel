@@ -58,3 +58,52 @@ export function upsertVideo(db: PrismaClient, input: VideoUpsertInput): Promise<
 export function getVideoByYoutubeId(db: PrismaClient, youtubeVideoId: string): Promise<Video | null> {
   return db.video.findUnique({ where: { youtubeVideoId } });
 }
+
+export function getVideoById(db: PrismaClient, id: string): Promise<Video | null> {
+  return db.video.findUnique({ where: { id } });
+}
+
+export interface DueSnapshotVideo {
+  id: string;
+  youtubeVideoId: string;
+  publishedAt: Date;
+  monitoringState: string;
+  lastSnapshotAt: Date | null;
+}
+
+/**
+ * Videos eligible for a monitoring snapshot (PRD §7.2/§7.3): never
+ * `unavailable` (the API no longer returns it, so polling again just burns
+ * quota) and past their adaptive `next_snapshot_due_at`. Ordered oldest-due
+ * first so the longest-overdue videos are served first when a tick's
+ * `limit` is smaller than the full due set.
+ */
+export function listVideosDueForSnapshot(db: PrismaClient, now: Date, limit: number): Promise<DueSnapshotVideo[]> {
+  return db.video.findMany({
+    where: { monitoringState: { not: "unavailable" }, nextSnapshotDueAt: { lte: now } },
+    orderBy: { nextSnapshotDueAt: "asc" },
+    take: limit,
+    select: { id: true, youtubeVideoId: true, publishedAt: true, monitoringState: true, lastSnapshotAt: true },
+  });
+}
+
+export interface UpdateVideoMonitoringStateInput {
+  monitoringState: string;
+  lastSnapshotAt: Date | null;
+  nextSnapshotDueAt: Date;
+}
+
+export function updateVideoMonitoringState(
+  db: PrismaClient,
+  videoId: string,
+  input: UpdateVideoMonitoringStateInput,
+): Promise<Video> {
+  return db.video.update({
+    where: { id: videoId },
+    data: {
+      monitoringState: input.monitoringState,
+      lastSnapshotAt: input.lastSnapshotAt,
+      nextSnapshotDueAt: input.nextSnapshotDueAt,
+    },
+  });
+}

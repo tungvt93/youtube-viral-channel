@@ -1,9 +1,10 @@
-/** BullMQ queue names (PRD §17.1, scoped to this phase's four queues). */
+/** BullMQ queue names (PRD §17.1). */
 export const QUEUE_NAMES = {
   discoveryRegional: "discovery-regional",
   discoverySearch: "discovery-search",
   videoEnrichment: "video-enrichment",
   channelEnrichment: "channel-enrichment",
+  videoMonitoring: "video-monitoring",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -45,3 +46,10 @@ export interface ChannelEnrichmentJobData {
   youtubeChannelIds: string[];
   jobRunId: string;
 }
+
+/**
+ * Empty on purpose: the monitoring-tick scheduler carries no per-tick
+ * parameters (unlike discovery's per-query template) — the processor
+ * re-selects whichever videos are due from the database on every tick.
+ */
+export type VideoMonitoringJobData = Record<string, never>;

@@ -11,6 +11,7 @@ export interface Queues {
   discoverySearch: Queue;
   videoEnrichment: Queue;
   channelEnrichment: Queue;
+  videoMonitoring: Queue;
 }
 
 /** One Queue instance per queue name, sharing a single (non-blocking) Redis connection. */
@@ -20,6 +21,7 @@ export function createQueues(connection: IORedis): Queues {
     discoverySearch: new Queue(QUEUE_NAMES.discoverySearch, { connection }),
     videoEnrichment: new Queue(QUEUE_NAMES.videoEnrichment, { connection }),
     channelEnrichment: new Queue(QUEUE_NAMES.channelEnrichment, { connection }),
+    videoMonitoring: new Queue(QUEUE_NAMES.videoMonitoring, { connection }),
   };
 }
 

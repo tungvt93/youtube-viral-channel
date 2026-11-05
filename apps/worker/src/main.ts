@@ -11,9 +11,10 @@ import {
   createDiscoveryRegionalProcessor,
   createDiscoverySearchProcessor,
   createVideoEnrichmentProcessor,
+  createVideoMonitoringProcessor,
   type ProcessorDeps,
 } from "./processors/index";
-import { registerDiscoverySchedulers } from "./schedulers/index";
+import { registerDiscoverySchedulers, registerVideoMonitoringScheduler } from "./schedulers/index";
 
 const apiKey = process.env.YOUTUBE_API_KEY;
 if (!apiKey) {
@@ -31,6 +32,7 @@ const workers = [
   new Worker(QUEUE_NAMES.discoverySearch, createDiscoverySearchProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.videoEnrichment, createVideoEnrichmentProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.channelEnrichment, createChannelEnrichmentProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.videoMonitoring, createVideoMonitoringProcessor(deps), { connection }),
 ];
 
 for (const worker of workers) {
@@ -46,7 +48,11 @@ registerDiscoverySchedulers(prisma, queues)
   .then((count) => logger.info({ count }, "registered discovery schedulers"))
   .catch((error) => logger.error({ status: "error" }, `failed to register discovery schedulers: ${String(error)}`));
 
-logger.info("worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment");
+registerVideoMonitoringScheduler(queues)
+  .then(() => logger.info("registered video-monitoring scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register video-monitoring scheduler: ${String(error)}`));
+
+logger.info("worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring");
 
 async function shutdown(): Promise<void> {
   logger.info("worker shutting down");

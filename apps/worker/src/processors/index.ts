@@ -8,3 +8,4 @@ export { createDiscoveryRegionalProcessor } from "./discovery-regional";
 export { createDiscoverySearchProcessor } from "./discovery-search";
 export { createVideoEnrichmentProcessor } from "./video-enrichment";
 export { createChannelEnrichmentProcessor } from "./channel-enrichment";
+export { createVideoMonitoringProcessor } from "./video-monitoring";

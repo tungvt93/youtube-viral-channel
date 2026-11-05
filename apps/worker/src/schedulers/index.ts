@@ -31,3 +31,24 @@ export async function registerDiscoverySchedulers(db: PrismaClient, queues: Queu
 
   return discoveryQueries.length;
 }
+
+/** Fixed id for the single video-monitoring tick (see plan Decisions, 2026-11-05: one static, colon-free id, no per-item fan-out). */
+export const VIDEO_MONITORING_SCHEDULER_ID = "video-monitoring-tick";
+
+/** How often the tick runs; each tick re-selects whichever videos are actually due (PRD §7.3's own cadence gates which ones that is). */
+const VIDEO_MONITORING_TICK_INTERVAL_MS = 15 * 60 * 1000;
+
+/**
+ * Registers the single repeatable video-monitoring tick (idempotent, same
+ * as `registerDiscoverySchedulers`). Deliberately one static scheduler id
+ * with no further `:`-composed BullMQ ids downstream — Phase 1's colon-
+ * jobId bug came from composing ids from a parent job's id, and this tick
+ * enqueues no fan-out job at all (see plan Risks And Recovery).
+ */
+export async function registerVideoMonitoringScheduler(queues: Queues): Promise<void> {
+  await queues.videoMonitoring.upsertJobScheduler(
+    VIDEO_MONITORING_SCHEDULER_ID,
+    { every: VIDEO_MONITORING_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.videoMonitoring, data: {} },
+  );
+}

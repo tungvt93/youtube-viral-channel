@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "../../generated/client";
-import { upsertVideo, type VideoUpsertInput } from "./videos";
+import { getVideoById, listVideosDueForSnapshot, updateVideoMonitoringState, upsertVideo, type VideoUpsertInput } from "./videos";
 
 const baseInput: VideoUpsertInput = {
   youtubeVideoId: "abc123",
@@ -37,5 +37,49 @@ describe("upsertVideo", () => {
     expect(call.create.categoryId).toBe("22");
     expect(call.update.categoryId).toBe("22");
     expect(call.update.lastEnrichedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("getVideoById", () => {
+  it("looks up a video by its internal id", async () => {
+    const findUnique = vi.fn().mockResolvedValue({ id: "video-1" });
+    const db = { video: { findUnique } } as unknown as PrismaClient;
+
+    await getVideoById(db, "video-1");
+
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: "video-1" } });
+  });
+});
+
+describe("listVideosDueForSnapshot", () => {
+  it("excludes unavailable videos and filters by nextSnapshotDueAt, oldest-due first", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const db = { video: { findMany } } as unknown as PrismaClient;
+    const now = new Date("2026-11-05T12:00:00Z");
+
+    await listVideosDueForSnapshot(db, now, 50);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { monitoringState: { not: "unavailable" }, nextSnapshotDueAt: { lte: now } },
+      orderBy: { nextSnapshotDueAt: "asc" },
+      take: 50,
+      select: { id: true, youtubeVideoId: true, publishedAt: true, monitoringState: true, lastSnapshotAt: true },
+    });
+  });
+});
+
+describe("updateVideoMonitoringState", () => {
+  it("writes monitoringState/lastSnapshotAt/nextSnapshotDueAt for the given video id", async () => {
+    const update = vi.fn().mockResolvedValue({ id: "video-1" });
+    const db = { video: { update } } as unknown as PrismaClient;
+    const lastSnapshotAt = new Date("2026-11-05T12:00:00Z");
+    const nextSnapshotDueAt = new Date("2026-11-05T18:00:00Z");
+
+    await updateVideoMonitoringState(db, "video-1", { monitoringState: "monitoring", lastSnapshotAt, nextSnapshotDueAt });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "video-1" },
+      data: { monitoringState: "monitoring", lastSnapshotAt, nextSnapshotDueAt },
+    });
   });
 });
