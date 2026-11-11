@@ -13,6 +13,7 @@ export type {
   ChannelVideoDiscoveryJobData,
   DiscoveryJobData,
   QueueName,
+  RecommendedScrapeJobData,
   TopicNormalizationJobData,
   TopicTrendAggregationJobData,
   VideoClassificationJobData,
