@@ -114,7 +114,7 @@ export function createVideoEnrichmentProcessor(deps: ProcessorDeps) {
           source: job.data.source,
           sourceRank: rankByVideoId.get(video.videoId) ?? null,
           discoveredAt: new Date(job.data.discoveredAt),
-          sourcePayload: null,
+          sourcePayload: job.data.sourcePayload ?? null,
         });
       }
 

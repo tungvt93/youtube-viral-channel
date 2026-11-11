@@ -32,7 +32,7 @@ function makeLogger() {
   return { child: vi.fn().mockReturnValue(child), _child: child };
 }
 
-function makeJob(items: VideoEnrichmentJobData["items"]): Job<VideoEnrichmentJobData> {
+function makeJob(items: VideoEnrichmentJobData["items"], overrides?: Partial<VideoEnrichmentJobData>): Job<VideoEnrichmentJobData> {
   return {
     id: "enrich-job-1",
     name: "video-enrichment",
@@ -43,6 +43,7 @@ function makeJob(items: VideoEnrichmentJobData["items"]): Job<VideoEnrichmentJob
       source: "most_popular",
       discoveredAt: "2026-11-05T00:00:00.000Z",
       items,
+      ...overrides,
     },
   } as unknown as Job<VideoEnrichmentJobData>;
 }
@@ -113,5 +114,43 @@ describe("createVideoEnrichmentProcessor", () => {
     expect(result).toEqual({ enriched: 0 });
     expect(listVideosByIds).not.toHaveBeenCalled();
     expect(finishJobRun).toHaveBeenCalledWith(deps.db, expect.objectContaining({ id: "run-1", status: "failed" }));
+  });
+
+  it("passes job.data.sourcePayload through to createDiscoveryEvent, defaulting to null when absent", async () => {
+    checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9999, projectedUsage: 1 });
+    ensureChannelStub.mockResolvedValue({ id: "internal-channel-1" });
+    upsertVideo.mockResolvedValue({ id: "internal-video-1" });
+    const listVideosByIds = vi.fn().mockResolvedValue({
+      callsMade: 1,
+      items: [
+        {
+          videoId: "v1",
+          channelId: "yt-channel-1",
+          title: "A short #shorts",
+          description: "",
+          publishedAt: "2026-11-01T00:00:00.000Z",
+          categoryId: "22",
+          durationSeconds: 30,
+          viewCount: 1000,
+        },
+      ],
+    });
+    const logger = makeLogger();
+    const queues = { channelEnrichment: {} } as unknown as Queues;
+    const deps = {
+      db: {} as never, ai: {} as never, aiModel: "unused",
+      youtube: { listVideosByIds } as never,
+      queues,
+      logger: logger as never,
+      now: () => new Date("2026-11-05T00:00:00Z"),
+    };
+
+    const processor = createVideoEnrichmentProcessor(deps);
+    await processor(makeJob([{ videoId: "v1", sourceRank: 0 }], { sourcePayload: { seedVideoId: "v1", rootSeedVideoId: "v1", gl: "US", hl: "en" } }));
+
+    expect(createDiscoveryEvent).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({ sourcePayload: { seedVideoId: "v1", rootSeedVideoId: "v1", gl: "US", hl: "en" } }),
+    );
   });
 });

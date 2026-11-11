@@ -11,6 +11,7 @@ export const QUEUE_NAMES = {
   videoClassification: "video-classification",
   topicNormalization: "topic-normalization",
   topicTrendAggregation: "topic-trend-aggregation",
+  recommendedScrape: "recommended-scrape",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -47,6 +48,8 @@ export interface VideoEnrichmentJobData {
   source: string;
   discoveredAt: string;
   items: VideoEnrichmentCandidate[];
+  /** Lineage metadata for `recommended_scrape`-sourced items, threaded verbatim into `createDiscoveryEvent`; absent/null for every other source. */
+  sourcePayload?: Record<string, unknown> | null;
 }
 
 export interface ChannelEnrichmentJobData {
@@ -104,3 +107,10 @@ export type TopicNormalizationJobData = Record<string, never>;
  * (PRD §10.5).
  */
 export type TopicTrendAggregationJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `ChannelVideoDiscoveryJobData`: the
+ * recommended-scrape tick re-selects whichever videos are due for seed
+ * selection from the database on every tick.
+ */
+export type RecommendedScrapeJobData = Record<string, never>;
