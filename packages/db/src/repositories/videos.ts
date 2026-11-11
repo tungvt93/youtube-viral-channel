@@ -270,7 +270,7 @@ export interface RecommendedScrapeSeed {
 }
 
 /**
- * Candidate pool for a recommended-scrape tick: `candidate`/`monitoring`
+ * Candidate pool for a recommended-scrape tick: `high_signal`/`cooling`
  * videos never yet scraped for recommendations, oldest-discovered first.
  * Each seed's `gl`/`hl` (the YouTube `videos.list` region/language params to
  * scrape it with) and `rootSeedVideoId` (for scrape-depth bookkeeping) are
@@ -278,13 +278,18 @@ export interface RecommendedScrapeSeed {
  * `gl`/`hl` from that event's `Market` and is its own root; a seed that was
  * itself discovered via a prior recommended-scrape instead reuses the
  * lineage recorded verbatim on that event's `sourcePayload` (the shape Task
- * 6's `recommended-scrape.ts` writes as `ScrapeLineage`). A seed is skipped
- * when its earliest event has no resolvable market, or a recommended_scrape
- * origin's `sourcePayload` is missing/malformed.
+ * 6's `recommended-scrape.ts` writes as `ScrapeLineage`). A seed whose
+ * earliest event has no resolvable market, or whose recommended_scrape
+ * origin's `sourcePayload` is missing/malformed, is marked scraped (not
+ * returned) so it doesn't permanently dominate the oldest-unscraped pool.
  */
-export async function listRecommendedScrapeSeeds(db: PrismaClient, limit: number): Promise<RecommendedScrapeSeed[]> {
+export async function listRecommendedScrapeSeeds(
+  db: PrismaClient,
+  limit: number,
+  now: Date,
+): Promise<RecommendedScrapeSeed[]> {
   const rows = await db.video.findMany({
-    where: { monitoringState: { in: ["candidate", "monitoring"] }, recommendedScrapedAt: null },
+    where: { monitoringState: { in: ["high_signal", "cooling"] }, recommendedScrapedAt: null },
     orderBy: { firstDiscoveredAt: "asc" },
     take: limit,
     select: {
@@ -299,9 +304,11 @@ export async function listRecommendedScrapeSeeds(db: PrismaClient, limit: number
   });
 
   const seeds: RecommendedScrapeSeed[] = [];
+  const unresolvedIds: string[] = [];
   for (const row of rows) {
     const earliestEvent = row.discoveryEvents[0];
     if (!earliestEvent) {
+      unresolvedIds.push(row.id);
       continue;
     }
 
@@ -309,6 +316,7 @@ export async function listRecommendedScrapeSeeds(db: PrismaClient, limit: number
       const lineage = earliestEvent.sourcePayload as { gl?: unknown; hl?: unknown; rootSeedVideoId?: unknown } | null;
       const { gl, hl, rootSeedVideoId } = lineage ?? {};
       if (typeof gl !== "string" || typeof hl !== "string" || typeof rootSeedVideoId !== "string") {
+        unresolvedIds.push(row.id);
         continue;
       }
       seeds.push({ videoId: row.id, youtubeVideoId: row.youtubeVideoId, gl, hl, rootSeedVideoId });
@@ -316,6 +324,7 @@ export async function listRecommendedScrapeSeeds(db: PrismaClient, limit: number
     }
 
     if (!earliestEvent.market) {
+      unresolvedIds.push(row.id);
       continue;
     }
     seeds.push({
@@ -326,6 +335,11 @@ export async function listRecommendedScrapeSeeds(db: PrismaClient, limit: number
       rootSeedVideoId: row.id,
     });
   }
+
+  if (unresolvedIds.length > 0) {
+    await db.video.updateMany({ where: { id: { in: unresolvedIds } }, data: { recommendedScrapedAt: now } });
+  }
+
   return seeds;
 }
 

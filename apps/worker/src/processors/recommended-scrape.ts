@@ -66,7 +66,7 @@ export function createRecommendedScrapeProcessor(deps: ProcessorDeps) {
       startedAt,
     });
 
-    const seeds = await listRecommendedScrapeSeeds(deps.db, MAX_SEEDS_PER_TICK);
+    const seeds = await listRecommendedScrapeSeeds(deps.db, MAX_SEEDS_PER_TICK, now());
     if (seeds.length === 0) {
       await finishJobRun(deps.db, {
         id: jobRun.id,

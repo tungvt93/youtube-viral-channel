@@ -285,6 +285,8 @@ describe("updateVideoMonitoringState", () => {
 });
 
 describe("listRecommendedScrapeSeeds", () => {
+  const NOW = new Date("2026-11-11T00:00:00Z");
+
   it("resolves gl/hl from the earliest DiscoveryEvent's market for a first-generation seed", async () => {
     const findMany = vi.fn().mockResolvedValue([
       {
@@ -295,11 +297,13 @@ describe("listRecommendedScrapeSeeds", () => {
         ],
       },
     ]);
-    const db = { video: { findMany } } as unknown as PrismaClient;
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const db = { video: { findMany, updateMany } } as unknown as PrismaClient;
 
-    const seeds = await listRecommendedScrapeSeeds(db, 20);
+    const seeds = await listRecommendedScrapeSeeds(db, 20, NOW);
 
     expect(seeds).toEqual([{ videoId: "v1", youtubeVideoId: "yt1", gl: "US", hl: "en", rootSeedVideoId: "v1" }]);
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("reuses the root seed's gl/hl verbatim from sourcePayload for a recommended_scrape-origin seed", async () => {
@@ -316,22 +320,50 @@ describe("listRecommendedScrapeSeeds", () => {
         ],
       },
     ]);
-    const db = { video: { findMany } } as unknown as PrismaClient;
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const db = { video: { findMany, updateMany } } as unknown as PrismaClient;
 
-    const seeds = await listRecommendedScrapeSeeds(db, 20);
+    const seeds = await listRecommendedScrapeSeeds(db, 20, NOW);
 
     expect(seeds).toEqual([{ videoId: "v2", youtubeVideoId: "yt2", gl: "US", hl: "en", rootSeedVideoId: "v1" }]);
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
-  it("skips a seed whose earliest DiscoveryEvent has no resolvable market", async () => {
+  it("marks a seed scraped (and excludes it) when its earliest DiscoveryEvent has no resolvable market, while still returning a resolvable row", async () => {
     const findMany = vi.fn().mockResolvedValue([
       { id: "v3", youtubeVideoId: "yt3", discoveryEvents: [{ source: "channel_uploads", sourcePayload: null, market: null }] },
+      {
+        id: "v1",
+        youtubeVideoId: "yt1",
+        discoveryEvents: [
+          { source: "search", sourcePayload: null, market: { code: "US", defaultLanguage: "en" } },
+        ],
+      },
     ]);
-    const db = { video: { findMany } } as unknown as PrismaClient;
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const db = { video: { findMany, updateMany } } as unknown as PrismaClient;
 
-    const seeds = await listRecommendedScrapeSeeds(db, 20);
+    const seeds = await listRecommendedScrapeSeeds(db, 20, NOW);
+
+    expect(seeds).toEqual([{ videoId: "v1", youtubeVideoId: "yt1", gl: "US", hl: "en", rootSeedVideoId: "v1" }]);
+    expect(updateMany).toHaveBeenCalledWith({ where: { id: { in: ["v3"] } }, data: { recommendedScrapedAt: NOW } });
+  });
+
+  it("marks a seed scraped when its recommended_scrape-origin sourcePayload is missing/malformed lineage", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "v4",
+        youtubeVideoId: "yt4",
+        discoveryEvents: [{ source: "recommended_scrape", sourcePayload: { gl: "US" }, market: null }],
+      },
+    ]);
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const db = { video: { findMany, updateMany } } as unknown as PrismaClient;
+
+    const seeds = await listRecommendedScrapeSeeds(db, 20, NOW);
 
     expect(seeds).toEqual([]);
+    expect(updateMany).toHaveBeenCalledWith({ where: { id: { in: ["v4"] } }, data: { recommendedScrapedAt: NOW } });
   });
 });
 
