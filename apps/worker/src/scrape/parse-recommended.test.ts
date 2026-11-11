@@ -9,9 +9,34 @@ describe("parseRecommendedVideos", () => {
           secondaryResults: {
             secondaryResults: {
               results: [
-                { compactVideoRenderer: { videoId: "rec1" } },
-                { compactVideoRenderer: { videoId: "rec2" } },
-                { someOtherRenderer: {} },
+                {
+                  itemSectionRenderer: {
+                    contents: [
+                      {
+                        lockupViewModel: {
+                          contentId: "rec1",
+                          contentType: "LOCKUP_CONTENT_TYPE_VIDEO",
+                          metadata: { lockupMetadataViewModel: { title: { content: "Rec 1" } } },
+                        },
+                      },
+                      {
+                        lockupViewModel: {
+                          contentId: "rec2",
+                          contentType: "LOCKUP_CONTENT_TYPE_VIDEO",
+                          metadata: { lockupMetadataViewModel: { title: { content: "Rec 2" } } },
+                        },
+                      },
+                      {
+                        lockupViewModel: {
+                          contentId: "playlist1",
+                          contentType: "LOCKUP_CONTENT_TYPE_PLAYLIST",
+                          metadata: { lockupMetadataViewModel: { title: { content: "A playlist" } } },
+                        },
+                      },
+                      { continuationItemRenderer: { continuationEndpoint: {} } },
+                    ],
+                  },
+                },
               ],
             },
           },
