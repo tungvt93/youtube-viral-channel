@@ -103,7 +103,14 @@ describe("listChannelsEligibleForScoring", () => {
       where: { videos: { some: {} } },
       orderBy: { lastEnrichedAt: { sort: "asc", nulls: "first" } },
       take: 100,
-      select: { id: true, youtubeChannelId: true, channelTier: true, currentSubscriberCount: true, firstDiscoveredAt: true },
+      select: {
+        id: true,
+        title: true,
+        youtubeChannelId: true,
+        channelTier: true,
+        currentSubscriberCount: true,
+        firstDiscoveredAt: true,
+      },
     });
   });
 });
@@ -145,6 +152,57 @@ describe("listChannels", () => {
     const [sql, ...params] = queryRawUnsafe.mock.calls[0];
     expect(sql).toContain("WHERE c.channel_tier = $3");
     expect(params).toEqual([20, 0, "breakout"]);
+  });
+
+  it("reports isWatchlisted as a literal false, with no EXISTS subquery, when no userId is given", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listChannels(db, { limit: 20, offset: 0 });
+
+    const [sql] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain('false AS "isWatchlisted"');
+    expect(sql).not.toContain("watchlist_items");
+  });
+
+  it("binds userId to its own parameter after the tier filter and computes isWatchlisted via a correlated EXISTS", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listChannels(db, { tier: "breakout", userId: "user-1", limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain(
+      "EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'channel' AND wi.entity_id = c.id AND wi.user_id = $4) AS \"isWatchlisted\"",
+    );
+    expect(sql).toContain("WHERE c.channel_tier = $3");
+    expect(sql).not.toContain("AND EXISTS");
+    expect(params).toEqual([20, 0, "breakout", "user-1"]);
+  });
+
+  it("filters to only watchlisted channels, reusing the same userId parameter, when watchlistedOnly is set", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listChannels(db, { userId: "user-1", watchlistedOnly: true, limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain(
+      "WHERE EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'channel' AND wi.entity_id = c.id AND wi.user_id = $3)",
+    );
+    expect(params).toEqual([20, 0, "user-1"]);
+  });
+
+  it("ignores watchlistedOnly when no userId is given", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listChannels(db, { watchlistedOnly: true, limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).not.toContain("watchlist_items");
+    expect(sql).not.toContain("WHERE c.channel_tier");
+    expect(params).toEqual([20, 0]);
   });
 });
 

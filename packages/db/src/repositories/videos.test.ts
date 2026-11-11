@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "../../generated/client";
 import {
+  countVideos,
   getVideoById,
+  getVideoDetail,
   getVideoIdsByYoutubeIds,
   listChannelPeerViews,
   listKnownYoutubeVideoIds,
   listRecommendedScrapeSeeds,
+  listVideos,
   listVideosDueForSnapshot,
   listVideosEligibleForClassification,
   listVideosEligibleForScoring,
@@ -88,6 +91,7 @@ describe("listVideosEligibleForScoring", () => {
     const findMany = vi.fn().mockResolvedValue([
       {
         id: "video-1",
+        title: "Some Video",
         channelId: "channel-1",
         publishedAt: new Date("2026-11-01T00:00:00Z"),
         monitoringState: "monitoring",
@@ -107,6 +111,7 @@ describe("listVideosEligibleForScoring", () => {
       take: 200,
       select: {
         id: true,
+        title: true,
         channelId: true,
         publishedAt: true,
         monitoringState: true,
@@ -119,6 +124,7 @@ describe("listVideosEligibleForScoring", () => {
     expect(result).toEqual([
       {
         id: "video-1",
+        title: "Some Video",
         channelId: "channel-1",
         publishedAt: new Date("2026-11-01T00:00:00Z"),
         monitoringState: "monitoring",
@@ -134,6 +140,7 @@ describe("listVideosEligibleForScoring", () => {
     const findMany = vi.fn().mockResolvedValue([
       {
         id: "video-1",
+        title: "Some Video",
         channelId: null,
         publishedAt: new Date("2026-11-01T00:00:00Z"),
         monitoringState: "cooling",
@@ -397,5 +404,221 @@ describe("getVideoIdsByYoutubeIds", () => {
 
     expect(map.size).toBe(0);
     expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("listVideos", () => {
+  it("runs the latest-score/latest-snapshot/first-discovery LATERAL query with limit/offset and no filters", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { limit: 20, offset: 0 });
+
+    expect(queryRawUnsafe).toHaveBeenCalledTimes(1);
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).not.toContain("WHERE first_disc");
+    expect(sql).not.toContain("WHERE v.");
+    expect(sql).not.toContain("WHERE c.");
+    expect(sql).not.toContain("EXISTS (SELECT 1 FROM video_topics");
+    expect(params).toEqual([20, 0]);
+  });
+
+  it("adds the market filter and its bound parameter when marketId is given", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { marketId: "market-1", limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("WHERE first_disc.market_id = $3");
+    expect(params).toEqual([20, 0, "market-1"]);
+  });
+
+  it("adds the topic filter as an EXISTS subquery against video_topics", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { topicId: "topic-1", limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("EXISTS (SELECT 1 FROM video_topics vt WHERE vt.video_id = v.id AND vt.topic_id = $3)");
+    expect(params).toEqual([20, 0, "topic-1"]);
+  });
+
+  it("adds the discovery query filter as an EXISTS subquery against discovery_events", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { discoveryQueryId: "query-1", limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("EXISTS (SELECT 1 FROM discovery_events de WHERE de.video_id = v.id AND de.discovery_query_id = $3)");
+    expect(params).toEqual([20, 0, "query-1"]);
+  });
+
+  it("combines multiple filters, binding each to its own positional parameter in order", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, {
+      format: "short_candidate",
+      lifecycle: "monitoring",
+      channelTier: "breakout",
+      minViews: 1000n,
+      minScore: 50,
+      limit: 20,
+      offset: 0,
+    });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("v.format_classification = $3");
+    expect(sql).toContain("v.monitoring_state = $4");
+    expect(sql).toContain("c.channel_tier = $5");
+    expect(sql).toContain("v.current_view_count >= $6");
+    expect(sql).toContain("latest_score.viral_score >= $7");
+    expect(params).toEqual([20, 0, "short_candidate", "monitoring", "breakout", 1000n, 50]);
+  });
+
+  it("reports isWatchlisted as a literal false, with no EXISTS subquery, when no userId is given", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { limit: 20, offset: 0 });
+
+    const [sql] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain('false AS "isWatchlisted"');
+    expect(sql).not.toContain("watchlist_items");
+  });
+
+  it("binds userId to its own parameter and computes isWatchlisted via a correlated EXISTS, without filtering, when watchlistedOnly is not set", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { userId: "user-1", limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain(
+      "EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'video' AND wi.entity_id = v.id AND wi.user_id = $3) AS \"isWatchlisted\"",
+    );
+    expect(sql).not.toContain("WHERE first_disc");
+    expect(sql).not.toContain("WHERE v.");
+    expect(sql).not.toContain("WHERE c.");
+    expect(params).toEqual([20, 0, "user-1"]);
+  });
+
+  it("filters to only watchlisted videos, reusing the same userId parameter, when watchlistedOnly is set", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { userId: "user-1", watchlistedOnly: true, limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain(
+      "WHERE EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'video' AND wi.entity_id = v.id AND wi.user_id = $3)",
+    );
+    expect(params).toEqual([20, 0, "user-1"]);
+  });
+
+  it("ignores watchlistedOnly when no userId is given", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { watchlistedOnly: true, limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).not.toContain("watchlist_items");
+    expect(sql).not.toContain("WHERE first_disc");
+    expect(sql).not.toContain("WHERE v.");
+    expect(sql).not.toContain("WHERE c.");
+    expect(params).toEqual([20, 0]);
+  });
+});
+
+describe("countVideos", () => {
+  it("runs a COUNT query with no limit/offset parameters and no filters", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([{ count: 5n }]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    const result = await countVideos(db, {});
+
+    expect(queryRawUnsafe).toHaveBeenCalledTimes(1);
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("SELECT COUNT(*)");
+    expect(sql).not.toMatch(/LIMIT \$/);
+    expect(sql).not.toContain("OFFSET");
+    expect(sql).not.toContain("WHERE first_disc");
+    expect(sql).not.toContain("WHERE v.");
+    expect(sql).not.toContain("WHERE EXISTS");
+    expect(params).toEqual([]);
+    expect(result).toBe(5);
+  });
+
+  it("applies the same filter conditions as listVideos, bound from parameter $1", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([{ count: 2n }]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    const result = await countVideos(db, { marketId: "market-1", lifecycle: "monitoring" });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("WHERE first_disc.market_id = $1 AND v.monitoring_state = $2");
+    expect(params).toEqual(["market-1", "monitoring"]);
+    expect(result).toBe(2);
+  });
+
+  it("filters to only watchlisted videos when watchlistedOnly and userId are both set", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([{ count: 1n }]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await countVideos(db, { userId: "user-1", watchlistedOnly: true });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain(
+      "WHERE EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'video' AND wi.entity_id = v.id AND wi.user_id = $1)",
+    );
+    expect(params).toEqual(["user-1"]);
+  });
+
+  it("returns 0 when the count row is missing", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    const result = await countVideos(db, {});
+
+    expect(result).toBe(0);
+  });
+});
+
+describe("getVideoDetail", () => {
+  it("looks up a video by id with channel/discoveryEvents/videoTopics included", async () => {
+    const row = { id: "video-1", youtubeVideoId: "abc123" };
+    const findUnique = vi.fn().mockResolvedValue(row);
+    const db = { video: { findUnique } } as unknown as PrismaClient;
+
+    const result = await getVideoDetail(db, "video-1");
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: "video-1" },
+      include: {
+        channel: { select: { id: true, title: true, channelTier: true, currentSubscriberCount: true } },
+        discoveryEvents: {
+          orderBy: { discoveredAt: "desc" },
+          take: 20,
+          select: { discoveredAt: true, source: true, market: { select: { code: true } } },
+        },
+        videoTopics: {
+          select: { relationType: true, confidence: true, topic: { select: { id: true, canonicalName: true } } },
+        },
+      },
+    });
+    expect(result).toEqual(row);
+  });
+
+  it("returns null when no video matches", async () => {
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const db = { video: { findUnique } } as unknown as PrismaClient;
+
+    const result = await getVideoDetail(db, "missing");
+
+    expect(result).toBeNull();
   });
 });

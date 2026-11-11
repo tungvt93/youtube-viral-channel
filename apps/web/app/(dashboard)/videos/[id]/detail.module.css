@@ -1,0 +1,88 @@
+.header {
+  margin-bottom: 20px;
+}
+
+.thumbnail {
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--color-bg);
+  display: block;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.metrics {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.breakdown {
+  font-size: 12px;
+  background: var(--color-bg);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.topicList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.topicChip {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.historyTable {
+  width: 100%;
+  font-size: 14px;
+}
+
+.historyTable th {
+  text-align: left;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.historyTable td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border);
+}

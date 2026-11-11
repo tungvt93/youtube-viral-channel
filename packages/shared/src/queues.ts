@@ -12,6 +12,7 @@ export const QUEUE_NAMES = {
   topicNormalization: "topic-normalization",
   topicTrendAggregation: "topic-trend-aggregation",
   recommendedScrape: "recommended-scrape",
+  systemAlerts: "system-alerts",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -114,3 +115,10 @@ export type TopicTrendAggregationJobData = Record<string, never>;
  * selection from the database on every tick.
  */
 export type RecommendedScrapeJobData = Record<string, never>;
+
+/**
+ * Empty on purpose, same reasoning as `VideoScoringJobData`: the
+ * system-alerts tick re-reads today's quota usage and every queue's job
+ * counts from scratch on every tick (plan Decisions, 2026-11-06).
+ */
+export type SystemAlertsJobData = Record<string, never>;

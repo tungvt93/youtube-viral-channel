@@ -1,5 +1,6 @@
 import type { Job } from "bullmq";
 import {
+  createAlertIfDue,
   finishJobRun,
   getLatestTrendSnapshot,
   listEnabledMarkets,
@@ -31,12 +32,16 @@ const TREND_WINDOW_MS = 7 * DAY_MS;
 /** First-cut constant (plan Risks, same caveat as the other scoring ticks' tau constants): a topic's own upload recency decays over about two days, not a single day — most-popular topics upload multiple times a day. */
 const TOPIC_RECENCY_TAU_HOURS = 48;
 
+/** PRD §11.7 "chống gửi trùng bằng ... cooldown" — a task-local default (plan Decisions), not PRD-specified. */
+const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 interface TopicGroupKey {
   marketId: string;
   topicId: string;
 }
 
 interface TopicGroupRawMetrics extends TopicGroupKey {
+  topicName: string;
   uniqueVideoCount: number;
   uniqueChannelCount: number;
   totalObservedViews: bigint | null;
@@ -105,6 +110,7 @@ async function computeGroupRawMetrics(
   return {
     marketId,
     topicId,
+    topicName: rows[0].topicName,
     uniqueVideoCount: rows.length,
     uniqueChannelCount,
     totalObservedViews,
@@ -136,7 +142,7 @@ async function computeGroupRawMetrics(
 export function createTopicTrendAggregationProcessor(deps: ProcessorDeps) {
   return async function processTopicTrendAggregation(
     job: Job<TopicTrendAggregationJobData>,
-  ): Promise<{ aggregated: number; lifecycleChanged: number }> {
+  ): Promise<{ aggregated: number; lifecycleChanged: number; alertsCreated: number }> {
     const now = deps.now ?? (() => new Date());
     const startedAt = now();
     const log = deps.logger.child({ jobId: job.id, queue: QUEUE_NAMES.topicTrendAggregation });
@@ -169,7 +175,7 @@ export function createTopicTrendAggregationProcessor(deps: ProcessorDeps) {
           resultCount: 0,
           errorMessage: null,
         });
-        return { aggregated: 0, lifecycleChanged: 0 };
+        return { aggregated: 0, lifecycleChanged: 0, alertsCreated: 0 };
       }
 
       const allMetrics: TopicGroupRawMetrics[] = [];
@@ -185,6 +191,7 @@ export function createTopicTrendAggregationProcessor(deps: ProcessorDeps) {
 
       let aggregated = 0;
       let lifecycleChanged = 0;
+      let alertsCreated = 0;
 
       for (const metrics of allMetrics) {
         const growthPct = metrics.previousUniqueVideoCount !== null ? computeGrowthPct(metrics.previousUniqueVideoCount, metrics.uniqueVideoCount) : null;
@@ -210,6 +217,26 @@ export function createTopicTrendAggregationProcessor(deps: ProcessorDeps) {
         });
         if (nextState !== currentState) {
           lifecycleChanged += 1;
+
+          if (nextState === "accelerating" || nextState === "trending") {
+            // Composite entityId "marketId:topicId" (plan Decisions) — lifecycle state is computed
+            // per (market, topic) pair, not per bare topicId; apps/web must split on ":" before linking.
+            const created = await createAlertIfDue(
+              deps.db,
+              {
+                alertType: nextState === "accelerating" ? "topic_accelerating" : "topic_trending",
+                entityType: "topic",
+                entityId: `${metrics.marketId}:${metrics.topicId}`,
+                message: `Topic "${metrics.topicName}" is now ${nextState}`,
+                severity: "info",
+                triggeredAt: windowEnd,
+              },
+              ALERT_COOLDOWN_MS,
+            );
+            if (created) {
+              alertsCreated += 1;
+            }
+          }
         }
 
         await upsertTrendSnapshot(deps.db, {
@@ -239,7 +266,7 @@ export function createTopicTrendAggregationProcessor(deps: ProcessorDeps) {
         resultCount: aggregated,
         errorMessage: null,
       });
-      return { aggregated, lifecycleChanged };
+      return { aggregated, lifecycleChanged, alertsCreated };
     } catch (error) {
       const message = String(error);
       log.error({ status: "error" }, message);

@@ -1627,12 +1627,18 @@ P1:
 
 - Tuân thủ YouTube API Services Terms of Service và Developer Policies hiện hành.
 - Hiển thị attribution/link về YouTube khi phù hợp.
-- Không vượt rate/quota hoặc né giới hạn kỹ thuật.
-- Không dùng scraping để thay thế API khi điều đó vi phạm điều khoản.
+- Không vượt rate/quota hoặc né giới hạn kỹ thuật đối với **YouTube Data API**.
+- Không dùng scraping để thay thế API khi điều đó vi phạm điều khoản — **ngoại trừ**
+  việc mở rộng "recommended videos" từ một video gốc ([[0004]]), vì API chính
+  thức không còn tham số thay thế (`relatedToVideoId` đã bị Google loại bỏ).
+  Ngoại lệ này chỉ áp dụng cho use case cá nhân/MVP đang mô tả trong tài liệu
+  này, giới hạn tần suất thấp, chạy tách biệt khỏi API key/project chính để
+  giảm blast radius, và phải được review lại trước khi public SaaS (xem dưới).
 - Tôn trọng deletion/update requirements và chính sách retention của API data.
 - Thiết kế cơ chế refresh/xóa dữ liệu khi cần.
 - Không lưu hoặc hiển thị dữ liệu cá nhân không cần thiết.
-- Review lại policy trước khi public SaaS.
+- Review lại policy trước khi public SaaS — bao gồm đánh giá lại ngoại lệ
+  scraping ở trên; không mang nguyên ngoại lệ này vào một SaaS công khai.
 
 ### 20.3. Copyright and reuse
 

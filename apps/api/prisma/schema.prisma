@@ -298,6 +298,7 @@ model TrendSnapshot {
   topic                Topic    @relation(fields: [topicId], references: [id])
 
   @@unique([marketId, topicId, windowStart, windowEnd])
+  @@index([topicId, windowEnd(sort: Desc)])
   @@map("trend_snapshots")
 }
 
@@ -364,6 +365,7 @@ model Alert {
   createdAt  DateTime  @default(now()) @map("created_at")
 
   @@index([isRead, triggeredAt(sort: Desc)])
+  @@index([alertType, entityType, entityId, triggeredAt(sort: Desc)])
   @@map("alerts")
 }
 
@@ -435,6 +437,7 @@ model User {
 
   sessions       Session[]
   watchlistItems WatchlistItem[]
+  auditLogs      AdminAuditLog[]
 
   @@map("users")
 }
@@ -449,4 +452,21 @@ model Session {
   user         User     @relation(fields: [userId], references: [id])
 
   @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §20.4 — audit log for admin actions
+// ---------------------------------------------------------------------------
+model AdminAuditLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  method     String   @db.VarChar(10)
+  path       String   @db.VarChar(255)
+  statusCode Int      @map("status_code")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("admin_audit_logs")
 }

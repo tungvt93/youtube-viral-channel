@@ -12,11 +12,13 @@ import {
   RECOMMENDED_SCRAPE_SCHEDULER_ID,
   registerDiscoverySchedulers,
   registerRecommendedScrapeScheduler,
+  registerSystemAlertsScheduler,
   registerTopicNormalizationScheduler,
   registerTopicTrendAggregationScheduler,
   registerVideoClassificationScheduler,
   registerVideoMonitoringScheduler,
   registerVideoScoringScheduler,
+  SYSTEM_ALERTS_SCHEDULER_ID,
   TOPIC_NORMALIZATION_SCHEDULER_ID,
   TOPIC_TREND_AGGREGATION_SCHEDULER_ID,
   VIDEO_CLASSIFICATION_SCHEDULER_ID,
@@ -153,6 +155,23 @@ describe("registerRecommendedScrapeScheduler", () => {
       RECOMMENDED_SCRAPE_SCHEDULER_ID,
       { every: 6 * 60 * 60 * 1000 },
       { name: QUEUE_NAMES.recommendedScrape, data: {} },
+    );
+  });
+});
+
+describe("registerSystemAlertsScheduler", () => {
+  it("registers exactly one repeatable scheduler under a single static, colon-free id, at the same 15-minute cadence as the other frequent ticks", async () => {
+    const systemAlerts = { upsertJobScheduler: vi.fn().mockResolvedValue(undefined) };
+    const queues = { systemAlerts };
+
+    await registerSystemAlertsScheduler(queues as never);
+
+    expect(SYSTEM_ALERTS_SCHEDULER_ID).not.toContain(":");
+    expect(systemAlerts.upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(systemAlerts.upsertJobScheduler).toHaveBeenCalledWith(
+      SYSTEM_ALERTS_SCHEDULER_ID,
+      { every: 15 * 60 * 1000 },
+      expect.objectContaining({ data: {} }),
     );
   });
 });

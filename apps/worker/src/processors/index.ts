@@ -16,3 +16,4 @@ export { createVideoClassificationProcessor } from "./video-classification";
 export { createTopicNormalizationProcessor } from "./topic-normalization";
 export { createTopicTrendAggregationProcessor } from "./topic-trend-aggregation";
 export { createRecommendedScrapeProcessor } from "./recommended-scrape";
+export { createSystemAlertsProcessor } from "./system-alerts";

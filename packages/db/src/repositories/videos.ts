@@ -129,6 +129,7 @@ export function updateVideoMonitoringState(
 
 export interface ScoringEligibleVideo {
   id: string;
+  title: string;
   channelId: string | null;
   publishedAt: Date;
   monitoringState: string;
@@ -153,6 +154,7 @@ export function listVideosEligibleForScoring(db: PrismaClient, limit: number): P
       take: limit,
       select: {
         id: true,
+        title: true,
         channelId: true,
         publishedAt: true,
         monitoringState: true,
@@ -165,6 +167,7 @@ export function listVideosEligibleForScoring(db: PrismaClient, limit: number): P
     .then((rows) =>
       rows.map((row) => ({
         id: row.id,
+        title: row.title,
         channelId: row.channelId,
         publishedAt: row.publishedAt,
         monitoringState: row.monitoringState,
@@ -363,4 +366,201 @@ export async function getVideoIdsByYoutubeIds(db: PrismaClient, youtubeVideoIds:
     select: { id: true, youtubeVideoId: true },
   });
   return new Map(rows.map((row) => [row.youtubeVideoId, row.id]));
+}
+
+export interface VideoListFilter {
+  marketId?: string;
+  format?: string;
+  lifecycle?: string;
+  topicId?: string;
+  /** Restrict to videos found by this exact `discovery_queries.id` (PRD §16.3 "filter by discovery source") — mirrors `topicId`'s EXISTS shape against `discovery_events` instead of `video_topics`. */
+  discoveryQueryId?: string;
+  channelTier?: string;
+  minViews?: bigint;
+  minScore?: number;
+  /** Restrict to videos on `userId`'s watchlist (PRD §16.3) — has no effect unless `userId` is also given. */
+  watchlistedOnly?: boolean;
+  /** Current user id, used both to compute `isWatchlisted` per row and (with `watchlistedOnly`) to filter. */
+  userId?: string;
+  limit: number;
+  offset: number;
+}
+
+export interface VideoListRow {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  thumbnailUrl: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  marketId: string | null;
+  marketCode: string | null;
+  publishedAt: Date;
+  currentViewCount: bigint | null;
+  formatClassification: string;
+  monitoringState: string;
+  latestViralScore: number | string | null;
+  latestScoreComputedAt: Date | null;
+  lastSnapshotAt: Date | null;
+  isWatchlisted: boolean;
+}
+
+/**
+ * `GET /videos` backing query (PRD §13.3): latest `VideoScore`/`VideoSnapshot`
+ * per video and the video's earliest `DiscoveryEvent` market (a video can be
+ * discovered via more than one market/query over time — the schema has no
+ * single owning-market column on `Video` itself, so the first discovery is
+ * used as the representative "market discovered" column), all via `LATERAL`
+ * joins — same one-round-trip discipline as `listChannels`. Only filters that
+ * map directly onto an existing indexed/plain column are supported; VPH,
+ * growth %, and outlier multiplier live inside `VideoScore.scoreBreakdown`
+ * JSON and are not filterable/sortable here (see Phase 6a plan Decisions).
+ *
+ * `isWatchlisted` is computed via a correlated `EXISTS` against
+ * `watchlist_items` bound to `filter.userId`'s own `$n` parameter (never
+ * string-interpolated) — with no `userId`, every row reports `false` rather
+ * than running an unbounded/unowned watchlist check.
+ */
+function buildVideoFilterSql(filter: Omit<VideoListFilter, "limit" | "offset">, params: unknown[]): { whereClause: string; watchlistExistsSql: string | null } {
+  const conditions: string[] = [];
+
+  function addCondition(sql: string, value: unknown): void {
+    params.push(value);
+    conditions.push(sql.replace("?", `$${params.length}`));
+  }
+
+  let watchlistUserIdParam: number | null = null;
+  if (filter.userId) {
+    params.push(filter.userId);
+    watchlistUserIdParam = params.length;
+  }
+  const watchlistExistsSql = watchlistUserIdParam
+    ? `EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'video' AND wi.entity_id = v.id AND wi.user_id = $${watchlistUserIdParam})`
+    : null;
+
+  if (filter.marketId) addCondition("first_disc.market_id = ?", filter.marketId);
+  if (filter.format) addCondition("v.format_classification = ?", filter.format);
+  if (filter.lifecycle) addCondition("v.monitoring_state = ?", filter.lifecycle);
+  if (filter.channelTier) addCondition("c.channel_tier = ?", filter.channelTier);
+  if (filter.minViews !== undefined) addCondition("v.current_view_count >= ?", filter.minViews);
+  if (filter.minScore !== undefined) addCondition("latest_score.viral_score >= ?", filter.minScore);
+  if (filter.topicId) addCondition("EXISTS (SELECT 1 FROM video_topics vt WHERE vt.video_id = v.id AND vt.topic_id = ?)", filter.topicId);
+  if (filter.discoveryQueryId) addCondition("EXISTS (SELECT 1 FROM discovery_events de WHERE de.video_id = v.id AND de.discovery_query_id = ?)", filter.discoveryQueryId);
+  if (filter.watchlistedOnly && watchlistExistsSql) conditions.push(watchlistExistsSql);
+
+  return { whereClause: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", watchlistExistsSql };
+}
+
+export async function listVideos(db: PrismaClient, filter: VideoListFilter): Promise<VideoListRow[]> {
+  const params: unknown[] = [filter.limit, filter.offset];
+  const { whereClause, watchlistExistsSql } = buildVideoFilterSql(filter, params);
+
+  return db.$queryRawUnsafe<VideoListRow[]>(
+    `
+    SELECT
+      v.id AS "id",
+      v.youtube_video_id AS "youtubeVideoId",
+      v.title AS "title",
+      v.thumbnail_url AS "thumbnailUrl",
+      v.channel_id AS "channelId",
+      c.title AS "channelTitle",
+      first_disc.market_id AS "marketId",
+      m.code AS "marketCode",
+      v.published_at AS "publishedAt",
+      v.current_view_count AS "currentViewCount",
+      v.format_classification AS "formatClassification",
+      v.monitoring_state AS "monitoringState",
+      latest_score.viral_score AS "latestViralScore",
+      latest_score.computed_at AS "latestScoreComputedAt",
+      latest_snap.collected_at AS "lastSnapshotAt",
+      ${watchlistExistsSql ?? "false"} AS "isWatchlisted"
+    FROM videos v
+    LEFT JOIN channels c ON c.id = v.channel_id
+    LEFT JOIN LATERAL (
+      SELECT market_id FROM discovery_events WHERE video_id = v.id ORDER BY discovered_at ASC LIMIT 1
+    ) first_disc ON true
+    LEFT JOIN markets m ON m.id = first_disc.market_id
+    LEFT JOIN LATERAL (
+      SELECT DISTINCT ON (video_id) viral_score, computed_at
+      FROM video_scores
+      WHERE video_id = v.id
+      ORDER BY video_id, computed_at DESC
+    ) latest_score ON true
+    LEFT JOIN LATERAL (
+      SELECT DISTINCT ON (video_id) collected_at
+      FROM video_snapshots
+      WHERE video_id = v.id
+      ORDER BY video_id, collected_at DESC
+    ) latest_snap ON true
+    ${whereClause}
+    ORDER BY latest_score.viral_score DESC NULLS LAST, v.published_at DESC
+    LIMIT $1 OFFSET $2
+    `,
+    ...params,
+  );
+}
+
+/** `GET /videos` total-match count (same filter semantics as `listVideos`, no `LIMIT`/`OFFSET`) — lets the caller page without guessing when the last page is reached. */
+export async function countVideos(db: PrismaClient, filter: Omit<VideoListFilter, "limit" | "offset">): Promise<number> {
+  const params: unknown[] = [];
+  const { whereClause } = buildVideoFilterSql(filter, params);
+
+  const rows = await db.$queryRawUnsafe<{ count: bigint }[]>(
+    `
+    SELECT COUNT(*) AS "count"
+    FROM videos v
+    LEFT JOIN channels c ON c.id = v.channel_id
+    LEFT JOIN LATERAL (
+      SELECT market_id FROM discovery_events WHERE video_id = v.id ORDER BY discovered_at ASC LIMIT 1
+    ) first_disc ON true
+    LEFT JOIN LATERAL (
+      SELECT DISTINCT ON (video_id) viral_score
+      FROM video_scores
+      WHERE video_id = v.id
+      ORDER BY video_id, computed_at DESC
+    ) latest_score ON true
+    ${whereClause}
+    `,
+    ...params,
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+export interface VideoDetailRow {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string | null;
+  publishedAt: Date;
+  durationSeconds: number | null;
+  formatClassification: string;
+  formatConfidence: { valueOf(): string };
+  monitoringState: string;
+  currentViewCount: bigint | null;
+  currentLikeCount: bigint | null;
+  currentCommentCount: bigint | null;
+  channel: { id: string; title: string; channelTier: string; currentSubscriberCount: bigint | null } | null;
+  discoveryEvents: { discoveredAt: Date; source: string; market: { code: string } | null }[];
+  videoTopics: { relationType: string; confidence: { valueOf(): string }; topic: { id: string; canonicalName: string } }[];
+}
+
+const DETAIL_DISCOVERY_EVENTS_LIMIT = 20;
+
+/** `GET /videos/:id` backing query (PRD §13.4 sections 1, 2, 6, 7, 9): plain Prisma relations, no raw SQL needed since each relation is a direct FK join, not a "latest row per video" aggregate. */
+export function getVideoDetail(db: PrismaClient, id: string): Promise<VideoDetailRow | null> {
+  return db.video.findUnique({
+    where: { id },
+    include: {
+      channel: { select: { id: true, title: true, channelTier: true, currentSubscriberCount: true } },
+      discoveryEvents: {
+        orderBy: { discoveredAt: "desc" },
+        take: DETAIL_DISCOVERY_EVENTS_LIMIT,
+        select: { discoveredAt: true, source: true, market: { select: { code: true } } },
+      },
+      videoTopics: {
+        select: { relationType: true, confidence: true, topic: { select: { id: true, canonicalName: true } } },
+      },
+    },
+  }) as unknown as Promise<VideoDetailRow | null>;
 }

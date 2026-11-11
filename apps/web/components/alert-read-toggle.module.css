@@ -1,0 +1,18 @@
+.form {
+  display: inline;
+}
+
+.button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: var(--color-text-muted);
+}
+
+.read {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}

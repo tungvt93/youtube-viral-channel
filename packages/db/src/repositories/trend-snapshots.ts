@@ -3,6 +3,7 @@ import type { PrismaClient, TrendSnapshot } from "../../generated/client";
 export interface ObservedTopicVideoRow {
   marketId: string;
   topicId: string;
+  topicName: string;
   videoId: string;
   channelId: string;
   currentViewCount: bigint | null;
@@ -44,12 +45,14 @@ export async function listObservedTopicVideos(
     SELECT DISTINCT
       de.market_id AS "marketId",
       tr.root_id AS "topicId",
+      root_topic.canonical_name AS "topicName",
       v.id AS "videoId",
       v.channel_id AS "channelId",
       v.current_view_count AS "currentViewCount",
       v.published_at AS "publishedAt"
     FROM video_topics vt
     JOIN topic_root tr ON tr.id = vt.topic_id
+    JOIN topics root_topic ON root_topic.id = tr.root_id
     JOIN videos v ON v.id = vt.video_id
     JOIN discovery_events de ON de.video_id = v.id
     WHERE de.market_id IS NOT NULL

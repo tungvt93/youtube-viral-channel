@@ -4,24 +4,43 @@ export function packageMarker(): string {
 
 export { prisma } from "./client";
 export type { PrismaClient } from "./client";
-export type { Prisma, VideoSnapshot } from "../generated/client";
+export type { Alert, JobRun, Prisma, VideoSnapshot } from "../generated/client";
 
-export { getMarketByCode, getMarketById, listEnabledMarkets } from "./repositories/markets";
+export { getMarketByCode, getMarketById, listAllMarkets, listEnabledMarkets, updateMarketEnabled } from "./repositories/markets";
 
 export {
+  createDiscoveryQuery,
   getDiscoveryQueryById,
+  listDiscoveryQueriesWithMarket,
   listEnabledDiscoveryQueriesWithMarket,
   touchDiscoveryQueryLastRunAt,
+  updateDiscoveryQuery,
 } from "./repositories/discovery-queries";
-export type { DiscoveryQueryWithMarket } from "./repositories/discovery-queries";
+export type {
+  CreateDiscoveryQueryInput,
+  DiscoveryQueryWithMarket,
+  UpdateDiscoveryQueryInput,
+} from "./repositories/discovery-queries";
+
+export { addToWatchlist, isWatchlisted, removeFromWatchlist } from "./repositories/watchlist-items";
+export type { WatchlistItemInput } from "./repositories/watchlist-items";
+
+export { createAlertIfDue, getAlertById, listAlerts, markAlertRead } from "./repositories/alerts";
+export type { AlertListFilter, CreateAlertInput } from "./repositories/alerts";
+
+export { createAdminAuditLog } from "./repositories/admin-audit-logs";
+export type { CreateAdminAuditLogInput } from "./repositories/admin-audit-logs";
 
 export {
+  countVideos,
   getVideoById,
   getVideoByYoutubeId,
+  getVideoDetail,
   getVideoIdsByYoutubeIds,
   listChannelPeerViews,
   listKnownYoutubeVideoIds,
   listRecommendedScrapeSeeds,
+  listVideos,
   listVideosDueForSnapshot,
   listVideosEligibleForClassification,
   listVideosEligibleForScoring,
@@ -37,6 +56,9 @@ export type {
   RecommendedScrapeSeed,
   ScoringEligibleVideo,
   UpdateVideoMonitoringStateInput,
+  VideoDetailRow,
+  VideoListFilter,
+  VideoListRow,
   VideoUpsertInput,
 } from "./repositories/videos";
 
@@ -74,11 +96,17 @@ export type { InsertChannelScoreInput } from "./repositories/channel-scores";
 export { createDiscoveryEvent } from "./repositories/discovery-events";
 export type { CreateDiscoveryEventInput } from "./repositories/discovery-events";
 
-export { finishJobRun, getJobRunById, startJobRun } from "./repositories/job-runs";
+export { finishJobRun, getJobRunById, listRecentJobRuns, startJobRun } from "./repositories/job-runs";
 export type { FinishJobRunInput, StartJobRunInput } from "./repositories/job-runs";
 
-export { recordApiUsage, sumTodayQuotaUsage } from "./repositories/api-usage";
-export type { RecordApiUsageInput } from "./repositories/api-usage";
+export {
+  countFailedCallsToday,
+  recordApiUsage,
+  sumQuotaUsageByEndpoint,
+  sumQuotaUsageByMarket,
+  sumTodayQuotaUsage,
+} from "./repositories/api-usage";
+export type { QuotaUsageByEndpoint, QuotaUsageByMarket, RecordApiUsageInput } from "./repositories/api-usage";
 
 export { getAiDailyBudget, getDailyBudget } from "./repositories/app-settings";
 
@@ -110,3 +138,23 @@ export {
   upsertTrendSnapshot,
 } from "./repositories/trend-snapshots";
 export type { ObservedTopicVideoRow, UpsertTrendSnapshotInput } from "./repositories/trend-snapshots";
+
+export { findUserByEmail } from "./repositories/users";
+
+export { createSession, deleteSession, getActiveSessionByToken } from "./repositories/sessions";
+export type { ActiveSessionWithUser, CreateSessionInput } from "./repositories/sessions";
+
+export {
+  getOverviewCounts,
+  listDiscoveryVolumeByDay,
+  listEmergingVideosByMarket,
+  listTopEmergingVideos,
+  listTopRisingTopics,
+} from "./repositories/overview";
+export type {
+  DiscoveryVolumePoint,
+  EmergingByMarketRow,
+  OverviewCounts,
+  TopEmergingVideoRow,
+  TopRisingTopicRow,
+} from "./repositories/overview";

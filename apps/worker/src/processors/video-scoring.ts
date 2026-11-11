@@ -1,5 +1,6 @@
 import type { Job } from "bullmq";
 import {
+  createAlertIfDue,
   finishJobRun,
   insertVideoScore,
   listChannelPeerViews,
@@ -13,10 +14,12 @@ import {
 } from "@yvi/db";
 import { computeNextSnapshotDueAt, QUEUE_NAMES, type MonitoringState, type VideoScoringJobData } from "@yvi/shared";
 import {
+  NICHE_BREAKOUT_SCORE_BONUS,
   ageBucketLabel,
   computeAcceleration,
   computeChannelOutlierMultiplier,
   computeGrowthPct,
+  computeNicheBreakoutSignal,
   computeRecencyScore,
   computeViralScore,
   computeVph,
@@ -26,6 +29,7 @@ import {
   nextScoreDrivenState,
   percentileRank,
   percentileValue,
+  type NicheBreakoutSignal,
   type ViralScoreComponents,
 } from "@yvi/scoring";
 import type { ProcessorDeps } from "./deps";
@@ -45,6 +49,9 @@ const MIN_COMPARABLE_CHANNEL_VIDEOS = 5;
 const CHANNEL_PEER_FETCH_LIMIT = 21;
 const CHANNEL_PEER_LIMIT = 20;
 
+/** PRD §11.7 "chống gửi trùng bằng ... cooldown" — a task-local default (plan Decisions), not PRD-specified. */
+const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 interface VideoMetrics {
   video: ScoringEligibleVideo;
   ageDays: number;
@@ -58,6 +65,7 @@ interface VideoMetrics {
   outlierMultiplier: number | null;
   outlierLog: number | null;
   recencyScore100: number;
+  nicheBreakout: NicheBreakoutSignal;
 }
 
 interface Cohort {
@@ -124,14 +132,15 @@ function computeRawMetrics(
   }
 
   const currentViews = video.currentViewCount !== null ? Number(video.currentViewCount) : null;
+  const subscriberCount = video.channelSubscriberCount !== null ? Number(video.channelSubscriberCount) : null;
   let outlier: { multiplier: number; usedFallback: boolean } | null = null;
   if (currentViews !== null) {
     const peers = video.channelId ? channelPeersByChannel.get(video.channelId) ?? [] : [];
     const peerViews = peers.filter((peer) => peer.videoId !== video.id).slice(0, CHANNEL_PEER_LIMIT).map((peer) => Number(peer.currentViewCount));
     const channelMedianViews = peerViews.length >= MIN_COMPARABLE_CHANNEL_VIDEOS ? median(peerViews) : null;
-    const subscriberCount = video.channelSubscriberCount !== null ? Number(video.channelSubscriberCount) : null;
     outlier = computeChannelOutlierMultiplier(currentViews, channelMedianViews, subscriberCount);
   }
+  const nicheBreakout = currentViews !== null ? computeNicheBreakoutSignal(currentViews, subscriberCount) : { isBreakout: false, vsr: null };
 
   const ageDays = (now.getTime() - video.publishedAt.getTime()) / DAY_MS;
   const ageHours = ageDays * 24;
@@ -149,6 +158,7 @@ function computeRawMetrics(
     outlierMultiplier: outlier?.multiplier ?? null,
     outlierLog: outlier ? logTransform(outlier.multiplier) : null,
     recencyScore100: computeRecencyScore(ageHours, RECENCY_TAU_HOURS) * 100,
+    nicheBreakout,
   };
 }
 
@@ -189,7 +199,7 @@ function buildCohorts(allMetrics: VideoMetrics[]): Map<string, Cohort> {
 export function createVideoScoringProcessor(deps: ProcessorDeps) {
   return async function processVideoScoring(
     job: Job<VideoScoringJobData>,
-  ): Promise<{ scored: number; skippedInsufficientData: number; stateChanged: number }> {
+  ): Promise<{ scored: number; skippedInsufficientData: number; stateChanged: number; alertsCreated: number }> {
     const now = deps.now ?? (() => new Date());
     const startedAt = now();
     const log = deps.logger.child({ jobId: job.id, queue: QUEUE_NAMES.videoScoring });
@@ -212,7 +222,7 @@ export function createVideoScoringProcessor(deps: ProcessorDeps) {
           resultCount: 0,
           errorMessage: null,
         });
-        return { scored: 0, skippedInsufficientData: 0, stateChanged: 0 };
+        return { scored: 0, skippedInsufficientData: 0, stateChanged: 0, alertsCreated: 0 };
       }
 
       const videoIds = eligibleVideos.map((video) => video.id);
@@ -241,6 +251,7 @@ export function createVideoScoringProcessor(deps: ProcessorDeps) {
       const cohorts = buildCohorts(allMetrics);
       let scored = 0;
       let stateChanged = 0;
+      let alertsCreated = 0;
 
       for (const metrics of allMetrics) {
         const cohort = cohorts.get(metrics.cohortKey);
@@ -256,15 +267,39 @@ export function createVideoScoringProcessor(deps: ProcessorDeps) {
           accelerationPercentile: metrics.acceleration !== null ? percentileRank(metrics.acceleration, cohort.acceleration) * 100 : null,
         };
         const result = computeViralScore(components);
+        const nicheBreakoutBonus = metrics.nicheBreakout.isBreakout ? NICHE_BREAKOUT_SCORE_BONUS : 0;
 
         await insertVideoScore(deps.db, {
           videoId: metrics.video.id,
           computedAt: scoreTime,
-          viralScore: result.viralScore,
-          scoreBreakdown: result.breakdown,
+          viralScore: Math.min(100, result.viralScore + nicheBreakoutBonus),
+          scoreBreakdown: {
+            ...result.breakdown,
+            nicheBreakout: { isBreakout: metrics.nicheBreakout.isBreakout, vsr: metrics.nicheBreakout.vsr, bonus: nicheBreakoutBonus },
+          },
           dataConfidence: result.dataConfidence,
         });
         scored += 1;
+
+        // Independent of the high_signal state machine below — a niche breakout can fire on any
+        // monitoring state and doesn't move `monitoringState` (see [[0003-niche-breakout-signal]]).
+        if (metrics.nicheBreakout.isBreakout) {
+          const created = await createAlertIfDue(
+            deps.db,
+            {
+              alertType: "video_niche_breakout",
+              entityType: "video",
+              entityId: metrics.video.id,
+              message: `"${metrics.video.title}" looks like a niche breakout (VSR ${metrics.nicheBreakout.vsr?.toFixed(2)}x, ${Number(metrics.video.channelSubscriberCount ?? 0).toLocaleString()} subs)`,
+              severity: "info",
+              triggeredAt: scoreTime,
+            },
+            ALERT_COOLDOWN_MS,
+          );
+          if (created) {
+            alertsCreated += 1;
+          }
+        }
 
         const vphP90 = cohort.vphRawAscending.length > 0 ? percentileValue(cohort.vphRawAscending, 0.9) : Infinity;
         const meetsHighSignalThreshold =
@@ -289,6 +324,24 @@ export function createVideoScoringProcessor(deps: ProcessorDeps) {
             nextSnapshotDueAt: computeNextSnapshotDueAt(newState, metrics.video.publishedAt, scoreTime),
           });
           stateChanged += 1;
+
+          if (newState === "high_signal") {
+            const created = await createAlertIfDue(
+              deps.db,
+              {
+                alertType: "video_high_signal",
+                entityType: "video",
+                entityId: metrics.video.id,
+                message: `"${metrics.video.title}" entered high signal state`,
+                severity: "info",
+                triggeredAt: scoreTime,
+              },
+              ALERT_COOLDOWN_MS,
+            );
+            if (created) {
+              alertsCreated += 1;
+            }
+          }
         }
       }
 
@@ -300,7 +353,7 @@ export function createVideoScoringProcessor(deps: ProcessorDeps) {
         resultCount: scored,
         errorMessage: null,
       });
-      return { scored, skippedInsufficientData, stateChanged };
+      return { scored, skippedInsufficientData, stateChanged, alertsCreated };
     } catch (error) {
       const message = String(error);
       log.error({ status: "error" }, message);

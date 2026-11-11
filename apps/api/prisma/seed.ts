@@ -1,3 +1,4 @@
+import * as argon2 from "argon2";
 import { Prisma, PrismaClient } from "../../../packages/db/generated/client";
 
 const prisma = new PrismaClient();
@@ -122,7 +123,31 @@ async function upsertDiscoveryQuery(seed: DiscoveryQuerySeed): Promise<void> {
   await prisma.discoveryQuery.create({ data: seed });
 }
 
+/**
+ * Idempotent admin user upsert (plan Approach step 1, Decisions 2026-11-06).
+ * Skips with a warning — never a default/blank password — when either env
+ * var is absent, so an operator who forgets to set them gets a loud signal
+ * instead of a silently-unseeded admin account or a weak default credential.
+ */
+export async function seedAdminUser(db: Pick<PrismaClient, "user">, env: { ADMIN_EMAIL?: string; ADMIN_PASSWORD?: string }): Promise<void> {
+  const email = env.ADMIN_EMAIL;
+  const password = env.ADMIN_PASSWORD;
+  if (!email || !password) {
+    console.warn("ADMIN_EMAIL and/or ADMIN_PASSWORD not set — skipping admin user seed.");
+    return;
+  }
+
+  const passwordHash = await argon2.hash(password);
+  await db.user.upsert({
+    where: { email },
+    create: { email, passwordHash, role: "admin" },
+    update: { passwordHash },
+  });
+}
+
 async function main(): Promise<void> {
+  await seedAdminUser(prisma, process.env);
+
   const markets = new Map<string, { id: string; defaultLanguage: string }>();
   for (const market of MARKETS) {
     const row = await prisma.market.upsert({
@@ -219,10 +244,13 @@ async function main(): Promise<void> {
   });
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (error) => {
-    console.error(error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+// Guarded so importing `seedAdminUser` for a unit test doesn't also run the full seed against a real database.
+if (require.main === module) {
+  main()
+    .then(() => prisma.$disconnect())
+    .catch(async (error) => {
+      console.error(error);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}

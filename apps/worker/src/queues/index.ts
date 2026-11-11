@@ -19,6 +19,7 @@ export interface Queues {
   topicNormalization: Queue;
   topicTrendAggregation: Queue;
   recommendedScrape: Queue;
+  systemAlerts: Queue;
 }
 
 /** One Queue instance per queue name, sharing a single (non-blocking) Redis connection. */
@@ -36,6 +37,7 @@ export function createQueues(connection: IORedis): Queues {
     topicNormalization: new Queue(QUEUE_NAMES.topicNormalization, { connection }),
     topicTrendAggregation: new Queue(QUEUE_NAMES.topicTrendAggregation, { connection }),
     recommendedScrape: new Queue(QUEUE_NAMES.recommendedScrape, { connection }),
+    systemAlerts: new Queue(QUEUE_NAMES.systemAlerts, { connection }),
   };
 }
 

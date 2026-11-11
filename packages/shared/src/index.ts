@@ -6,6 +6,8 @@ export { discoveryIdempotencyKey, formatDateBucket, videoEnrichIdempotencyKey } 
 export type { DiscoveryIdempotencyKeyParams, VideoEnrichIdempotencyKeyParams } from "./idempotency";
 export { evaluateQuotaGuard } from "./quota-guard";
 export type { QuotaGuardDecision, QuotaGuardInput } from "./quota-guard";
+export { quotaBand, QUOTA_CRITICAL_PERCENT, QUOTA_HIGH_PERCENT, QUOTA_WARN_PERCENT } from "./quota-band";
+export type { QuotaBand } from "./quota-band";
 export { QUEUE_NAMES } from "./queues";
 export type {
   ChannelEnrichmentJobData,
@@ -14,6 +16,7 @@ export type {
   DiscoveryJobData,
   QueueName,
   RecommendedScrapeJobData,
+  SystemAlertsJobData,
   TopicNormalizationJobData,
   TopicTrendAggregationJobData,
   VideoClassificationJobData,

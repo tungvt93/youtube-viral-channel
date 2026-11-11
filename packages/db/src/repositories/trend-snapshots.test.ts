@@ -20,12 +20,15 @@ describe("listObservedTopicVideos", () => {
     const [sql] = queryRawUnsafe.mock.calls[0];
     expect(sql).toContain("de.market_id IS NOT NULL");
     expect(sql).toContain("v.channel_id IS NOT NULL");
+    expect(sql).toContain("JOIN topics root_topic ON root_topic.id = tr.root_id");
+    expect(sql).toContain('root_topic.canonical_name AS "topicName"');
   });
 
   it("returns the raw rows unchanged", async () => {
     const row = {
       marketId: "market-us",
       topicId: "topic-1",
+      topicName: "Some Topic",
       videoId: "video-1",
       channelId: "channel-1",
       currentViewCount: 1000n,

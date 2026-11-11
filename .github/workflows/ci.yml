@@ -7,6 +7,38 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: yvi
+          POSTGRES_PASSWORD: yvi
+          POSTGRES_DB: yvi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yvi"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://yvi:yvi@localhost:5432/yvi
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: ci-test-password
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,5 +54,13 @@ jobs:
       - run: pnpm lint
 
       - run: pnpm typecheck
+
+      - name: Apply database migrations
+        working-directory: apps/api
+        run: pnpm run prisma:deploy
+
+      - name: Seed database (admin user, markets, topics)
+        working-directory: apps/api
+        run: pnpm run build:deps && node -r ts-node/register prisma/seed.ts
 
       - run: pnpm test

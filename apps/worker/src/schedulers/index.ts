@@ -160,3 +160,18 @@ export async function registerRecommendedScrapeScheduler(queues: Queues): Promis
     { name: QUEUE_NAMES.recommendedScrape, data: {} },
   );
 }
+
+/** Fixed id for the single system-alerts tick — same single-static-id pattern as `VIDEO_MONITORING_SCHEDULER_ID` (plan Decisions). */
+export const SYSTEM_ALERTS_SCHEDULER_ID = "system-alerts-tick";
+
+/** Same 15-minute cadence as the other frequent ticks (plan Approach, 2026-11-06) — quota usage and queue depth both change fast enough to warrant it. */
+const SYSTEM_ALERTS_TICK_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Registers the single repeatable system-alerts tick (idempotent, same as `registerVideoMonitoringScheduler`). */
+export async function registerSystemAlertsScheduler(queues: Queues): Promise<void> {
+  await queues.systemAlerts.upsertJobScheduler(
+    SYSTEM_ALERTS_SCHEDULER_ID,
+    { every: SYSTEM_ALERTS_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.systemAlerts, data: {} },
+  );
+}

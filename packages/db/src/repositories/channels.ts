@@ -100,6 +100,7 @@ export function updateChannelTier(db: PrismaClient, channelId: string, channelTi
 
 export interface ScoringEligibleChannel {
   id: string;
+  title: string;
   youtubeChannelId: string;
   channelTier: string;
   currentSubscriberCount: bigint | null;
@@ -118,7 +119,14 @@ export function listChannelsEligibleForScoring(db: PrismaClient, limit: number):
     where: { videos: { some: {} } },
     orderBy: { lastEnrichedAt: { sort: "asc", nulls: "first" } },
     take: limit,
-    select: { id: true, youtubeChannelId: true, channelTier: true, currentSubscriberCount: true, firstDiscoveredAt: true },
+    select: {
+      id: true,
+      title: true,
+      youtubeChannelId: true,
+      channelTier: true,
+      currentSubscriberCount: true,
+      firstDiscoveredAt: true,
+    },
   });
 }
 
@@ -145,6 +153,10 @@ export function listChannelVideosForScoring(db: PrismaClient, channelId: string)
 
 export interface ChannelListFilter {
   tier?: string;
+  /** Restrict to channels on `userId`'s watchlist (PRD §16.4) — has no effect unless `userId` is also given. */
+  watchlistedOnly?: boolean;
+  /** Current user id, used both to compute `isWatchlisted` per row and (with `watchlistedOnly`) to filter. */
+  userId?: string;
   limit: number;
   offset: number;
 }
@@ -159,6 +171,7 @@ export interface ChannelListRow {
   currentVideoCount: bigint | null;
   latestChannelScore: number | null;
   latestScoreComputedAt: Date | null;
+  isWatchlisted: boolean;
 }
 
 /**
@@ -167,13 +180,33 @@ export interface ChannelListRow {
  * `listChannelPeerViews`), sorted by that latest score descending so the
  * most outlier-y channels surface first. Scoreless channels (no row yet)
  * still appear, via the `LEFT JOIN`, with a null score sorting last.
+ *
+ * `isWatchlisted` is computed via a correlated `EXISTS` against
+ * `watchlist_items` bound to `filter.userId`'s own `$n` parameter (never
+ * string-interpolated), same discipline as `listVideos`.
  */
 export async function listChannels(db: PrismaClient, filter: ChannelListFilter): Promise<ChannelListRow[]> {
-  const tierClause = filter.tier ? `WHERE c.channel_tier = $3` : "";
   const params: unknown[] = [filter.limit, filter.offset];
+
+  let tierParam: number | null = null;
   if (filter.tier) {
     params.push(filter.tier);
+    tierParam = params.length;
   }
+  let watchlistUserIdParam: number | null = null;
+  if (filter.userId) {
+    params.push(filter.userId);
+    watchlistUserIdParam = params.length;
+  }
+  const watchlistExistsSql = watchlistUserIdParam
+    ? `EXISTS (SELECT 1 FROM watchlist_items wi WHERE wi.entity_type = 'channel' AND wi.entity_id = c.id AND wi.user_id = $${watchlistUserIdParam})`
+    : null;
+
+  const conditions: string[] = [];
+  if (tierParam) conditions.push(`c.channel_tier = $${tierParam}`);
+  if (filter.watchlistedOnly && watchlistExistsSql) conditions.push(watchlistExistsSql);
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
   return db.$queryRawUnsafe<ChannelListRow[]>(
     `
     SELECT
@@ -185,7 +218,8 @@ export async function listChannels(db: PrismaClient, filter: ChannelListFilter):
       c.current_view_count AS "currentViewCount",
       c.current_video_count AS "currentVideoCount",
       latest.channel_score AS "latestChannelScore",
-      latest.computed_at AS "latestScoreComputedAt"
+      latest.computed_at AS "latestScoreComputedAt",
+      ${watchlistExistsSql ?? "false"} AS "isWatchlisted"
     FROM channels c
     LEFT JOIN LATERAL (
       SELECT DISTINCT ON (channel_id) channel_score, computed_at
@@ -193,7 +227,7 @@ export async function listChannels(db: PrismaClient, filter: ChannelListFilter):
       WHERE channel_id = c.id
       ORDER BY channel_id, computed_at DESC
     ) latest ON true
-    ${tierClause}
+    ${whereClause}
     ORDER BY latest.channel_score DESC NULLS LAST, c.first_discovered_at DESC
     LIMIT $1 OFFSET $2
     `,

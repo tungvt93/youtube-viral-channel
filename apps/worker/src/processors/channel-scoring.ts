@@ -1,5 +1,6 @@
 import type { Job } from "bullmq";
 import {
+  createAlertIfDue,
   finishJobRun,
   getLatestChannelScore,
   insertChannelScore,
@@ -49,6 +50,9 @@ const CHANNEL_OUTLIER_MULTIPLIER_THRESHOLD = 3;
  * uploaded last week shouldn't score wildly differently on this axis alone.
  */
 const CHANNEL_RECENCY_TAU_HOURS = 7 * 24;
+
+/** PRD §11.7 "chống gửi trùng bằng ... cooldown" — a task-local default (plan Decisions), not PRD-specified. */
+const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 interface ChannelRawMetrics {
   channel: ScoringEligibleChannel;
@@ -133,7 +137,7 @@ function computeChannelRawMetrics(
 export function createChannelScoringProcessor(deps: ProcessorDeps) {
   return async function processChannelScoring(
     job: Job<ChannelScoringJobData>,
-  ): Promise<{ scored: number; tierChanged: number }> {
+  ): Promise<{ scored: number; tierChanged: number; alertsCreated: number }> {
     const now = deps.now ?? (() => new Date());
     const startedAt = now();
     const log = deps.logger.child({ jobId: job.id, queue: QUEUE_NAMES.channelScoring });
@@ -156,7 +160,7 @@ export function createChannelScoringProcessor(deps: ProcessorDeps) {
           resultCount: 0,
           errorMessage: null,
         });
-        return { scored: 0, tierChanged: 0 };
+        return { scored: 0, tierChanged: 0, alertsCreated: 0 };
       }
 
       const scoreTime = now();
@@ -173,6 +177,7 @@ export function createChannelScoringProcessor(deps: ProcessorDeps) {
 
       let scored = 0;
       let tierChanged = 0;
+      let alertsCreated = 0;
 
       for (const metrics of allMetrics) {
         const components: ChannelOutlierScoreComponents = {
@@ -207,6 +212,24 @@ export function createChannelScoringProcessor(deps: ProcessorDeps) {
         if (newTier !== metrics.channel.channelTier) {
           await updateChannelTier(deps.db, metrics.channel.id, newTier);
           tierChanged += 1;
+
+          if (newTier === "breakout") {
+            const created = await createAlertIfDue(
+              deps.db,
+              {
+                alertType: "channel_breakout",
+                entityType: "channel",
+                entityId: metrics.channel.id,
+                message: `"${metrics.channel.title}" broke out`,
+                severity: "info",
+                triggeredAt: scoreTime,
+              },
+              ALERT_COOLDOWN_MS,
+            );
+            if (created) {
+              alertsCreated += 1;
+            }
+          }
         }
       }
 
@@ -218,7 +241,7 @@ export function createChannelScoringProcessor(deps: ProcessorDeps) {
         resultCount: scored,
         errorMessage: null,
       });
-      return { scored, tierChanged };
+      return { scored, tierChanged, alertsCreated };
     } catch (error) {
       const message = String(error);
       log.error({ status: "error" }, message);

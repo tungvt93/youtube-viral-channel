@@ -1,0 +1,34 @@
+.header {
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.metrics {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}

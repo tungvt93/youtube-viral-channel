@@ -14,6 +14,7 @@ import {
   createDiscoveryRegionalProcessor,
   createDiscoverySearchProcessor,
   createRecommendedScrapeProcessor,
+  createSystemAlertsProcessor,
   createTopicNormalizationProcessor,
   createTopicTrendAggregationProcessor,
   createVideoClassificationProcessor,
@@ -27,6 +28,7 @@ import {
   registerChannelVideoDiscoveryScheduler,
   registerDiscoverySchedulers,
   registerRecommendedScrapeScheduler,
+  registerSystemAlertsScheduler,
   registerTopicNormalizationScheduler,
   registerTopicTrendAggregationScheduler,
   registerVideoClassificationScheduler,
@@ -65,6 +67,7 @@ const workers = [
   new Worker(QUEUE_NAMES.topicNormalization, createTopicNormalizationProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.topicTrendAggregation, createTopicTrendAggregationProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.recommendedScrape, createRecommendedScrapeProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.systemAlerts, createSystemAlertsProcessor(deps), { connection }),
 ];
 
 for (const worker of workers) {
@@ -112,8 +115,12 @@ registerRecommendedScrapeScheduler(queues)
   .then(() => logger.info("registered recommended-scrape scheduler"))
   .catch((error) => logger.error({ status: "error" }, `failed to register recommended-scrape scheduler: ${String(error)}`));
 
+registerSystemAlertsScheduler(queues)
+  .then(() => logger.info("registered system-alerts scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register system-alerts scheduler: ${String(error)}`));
+
 logger.info(
-  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation, recommended-scrape",
+  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation, recommended-scrape, system-alerts",
 );
 
 async function shutdown(): Promise<void> {

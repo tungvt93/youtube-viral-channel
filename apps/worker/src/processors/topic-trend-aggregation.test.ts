@@ -2,16 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "bullmq";
 import type { TopicTrendAggregationJobData } from "@yvi/shared";
 
-const { finishJobRun, getLatestTrendSnapshot, listEnabledMarkets, listObservedTopicVideos, startJobRun, upsertTrendSnapshot } = vi.hoisted(() => ({
-  finishJobRun: vi.fn(),
-  getLatestTrendSnapshot: vi.fn(),
-  listEnabledMarkets: vi.fn(),
-  listObservedTopicVideos: vi.fn(),
-  startJobRun: vi.fn(),
-  upsertTrendSnapshot: vi.fn(),
-}));
+const { createAlertIfDue, finishJobRun, getLatestTrendSnapshot, listEnabledMarkets, listObservedTopicVideos, startJobRun, upsertTrendSnapshot } =
+  vi.hoisted(() => ({
+    createAlertIfDue: vi.fn(),
+    finishJobRun: vi.fn(),
+    getLatestTrendSnapshot: vi.fn(),
+    listEnabledMarkets: vi.fn(),
+    listObservedTopicVideos: vi.fn(),
+    startJobRun: vi.fn(),
+    upsertTrendSnapshot: vi.fn(),
+  }));
 
 vi.mock("@yvi/db", () => ({
+  createAlertIfDue,
   finishJobRun,
   getLatestTrendSnapshot,
   listEnabledMarkets,
@@ -42,6 +45,7 @@ function hotRows(marketId: string, topicId: string) {
   return Array.from({ length: 20 }, (_, i) => ({
     marketId,
     topicId,
+    topicName: `Topic ${topicId}`,
     videoId: `hot-v${i}`,
     channelId: `hot-ch${i}`,
     currentViewCount: 1000n,
@@ -54,6 +58,7 @@ function coldRows(marketId: string, topicId: string) {
   return Array.from({ length: 20 }, (_, i) => ({
     marketId,
     topicId,
+    topicName: `Topic ${topicId}`,
     videoId: `cold-v${i}`,
     channelId: "cold-ch0",
     currentViewCount: 10n,
@@ -74,7 +79,7 @@ describe("createTopicTrendAggregationProcessor", () => {
 
     const result = await createTopicTrendAggregationProcessor(makeDeps())(makeJob());
 
-    expect(result).toEqual({ aggregated: 0, lifecycleChanged: 0 });
+    expect(result).toEqual({ aggregated: 0, lifecycleChanged: 0, alertsCreated: 0 });
     expect(upsertTrendSnapshot).not.toHaveBeenCalled();
     expect(finishJobRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "completed", resultCount: 0 }));
   });
@@ -95,10 +100,24 @@ describe("createTopicTrendAggregationProcessor", () => {
     listObservedTopicVideos.mockResolvedValue([...hotRows("m1", "hot-topic"), ...coldRows("m1", "cold-topic")]);
     listEnabledMarkets.mockResolvedValue([{ id: "m1" }]);
     getLatestTrendSnapshot.mockResolvedValue(null);
+    createAlertIfDue.mockResolvedValue({ id: "alert-1" });
 
     const result = await createTopicTrendAggregationProcessor(makeDeps())(makeJob());
 
-    expect(result).toEqual({ aggregated: 2, lifecycleChanged: 1 });
+    expect(result).toEqual({ aggregated: 2, lifecycleChanged: 1, alertsCreated: 1 });
+    expect(createAlertIfDue).toHaveBeenCalledTimes(1);
+    expect(createAlertIfDue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        alertType: "topic_trending",
+        entityType: "topic",
+        entityId: "m1:hot-topic",
+        message: expect.stringContaining("Topic hot-topic"),
+        severity: "info",
+        triggeredAt: NOW,
+      }),
+      24 * 60 * 60 * 1000,
+    );
 
     const hotCall = upsertTrendSnapshot.mock.calls.find(([, input]) => input.topicId === "hot-topic");
     expect(hotCall?.[1]).toMatchObject({
@@ -144,19 +163,49 @@ describe("createTopicTrendAggregationProcessor", () => {
 
     const result = await createTopicTrendAggregationProcessor(makeDeps())(makeJob());
 
-    expect(result).toEqual({ aggregated: 1, lifecycleChanged: 1 });
+    expect(result).toEqual({ aggregated: 1, lifecycleChanged: 1, alertsCreated: 0 });
     expect(upsertTrendSnapshot).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ lifecycleState: "declining" }));
+    expect(createAlertIfDue).not.toHaveBeenCalled();
   });
 
   it("recovers a declining topic to accelerating once momentum rises back above the threshold", async () => {
     listObservedTopicVideos.mockResolvedValue(hotRows("m1", "t1"));
     listEnabledMarkets.mockResolvedValue([{ id: "m1" }]);
     getLatestTrendSnapshot.mockResolvedValue({ uniqueVideoCount: 20, momentumScore: 5, lifecycleState: "declining" });
+    createAlertIfDue.mockResolvedValue({ id: "alert-1" });
 
     const result = await createTopicTrendAggregationProcessor(makeDeps())(makeJob());
 
-    expect(result).toEqual({ aggregated: 1, lifecycleChanged: 1 });
+    expect(result).toEqual({ aggregated: 1, lifecycleChanged: 1, alertsCreated: 1 });
     expect(upsertTrendSnapshot).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ lifecycleState: "accelerating" }));
+    expect(createAlertIfDue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        alertType: "topic_accelerating",
+        entityType: "topic",
+        entityId: "m1:t1",
+        message: expect.stringContaining("Topic t1"),
+        severity: "info",
+        triggeredAt: NOW,
+      }),
+      24 * 60 * 60 * 1000,
+    );
+  });
+
+  it("does not double-count an alert when createAlertIfDue reports the entity is within its cooldown window", async () => {
+    listObservedTopicVideos.mockResolvedValue(hotRows("m1", "t1"));
+    listEnabledMarkets.mockResolvedValue([{ id: "m1" }]);
+    getLatestTrendSnapshot.mockResolvedValue({ uniqueVideoCount: 20, momentumScore: 5, lifecycleState: "declining" });
+
+    createAlertIfDue.mockResolvedValueOnce({ id: "alert-1" });
+    const first = await createTopicTrendAggregationProcessor(makeDeps())(makeJob());
+    expect(first.alertsCreated).toBe(1);
+
+    createAlertIfDue.mockResolvedValueOnce(null);
+    const second = await createTopicTrendAggregationProcessor(makeDeps())(makeJob());
+    expect(second.alertsCreated).toBe(0);
+
+    expect(createAlertIfDue).toHaveBeenCalledTimes(2);
   });
 
   it("fails the JobRun and rethrows when selecting observed videos errors", async () => {

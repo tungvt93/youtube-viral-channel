@@ -58,3 +58,8 @@ export function finishJobRun(db: PrismaClient, input: FinishJobRunInput): Promis
 export function getJobRunById(db: PrismaClient, id: string): Promise<JobRun | null> {
   return db.jobRun.findUnique({ where: { id } });
 }
+
+/** `GET /discovery/jobs` and `GET /system/jobs` backing query — most-recently-started jobs first, same ordering as the `[queue, startedAt desc]` index. */
+export function listRecentJobRuns(db: PrismaClient, limit: number): Promise<JobRun[]> {
+  return db.jobRun.findMany({ orderBy: { startedAt: "desc" }, take: limit });
+}

@@ -21,6 +21,15 @@ export { meetsViralCandidateThreshold, nextScoreDrivenState } from "./lifecycle"
 export type { CandidateThresholdInput, ScoreSignal } from "./lifecycle";
 
 export {
+  NICHE_BREAKOUT_MAX_SUBS,
+  NICHE_BREAKOUT_MIN_SUBS,
+  NICHE_BREAKOUT_SCORE_BONUS,
+  NICHE_BREAKOUT_VSR_THRESHOLD,
+  computeNicheBreakoutSignal,
+} from "./niche-breakout";
+export type { NicheBreakoutOptions, NicheBreakoutSignal } from "./niche-breakout";
+
+export {
   computeChannelMedianViews,
   computeChannelRecencyScore,
   computeChannelRecentMedianVph,
