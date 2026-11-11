@@ -18,4 +18,6 @@ export interface ProcessorDeps {
   queues: Queues;
   logger: Logger;
   now?: () => Date;
+  /** Injected for `recommended-scrape` tests, same role as `now`. */
+  fetchImpl?: typeof fetch;
 }
