@@ -13,6 +13,7 @@ import {
   createChannelVideoDiscoveryProcessor,
   createDiscoveryRegionalProcessor,
   createDiscoverySearchProcessor,
+  createRecommendedScrapeProcessor,
   createTopicNormalizationProcessor,
   createTopicTrendAggregationProcessor,
   createVideoClassificationProcessor,
@@ -25,6 +26,7 @@ import {
   registerChannelScoringScheduler,
   registerChannelVideoDiscoveryScheduler,
   registerDiscoverySchedulers,
+  registerRecommendedScrapeScheduler,
   registerTopicNormalizationScheduler,
   registerTopicTrendAggregationScheduler,
   registerVideoClassificationScheduler,
@@ -62,6 +64,7 @@ const workers = [
   new Worker(QUEUE_NAMES.videoClassification, createVideoClassificationProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.topicNormalization, createTopicNormalizationProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.topicTrendAggregation, createTopicTrendAggregationProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.recommendedScrape, createRecommendedScrapeProcessor(deps), { connection }),
 ];
 
 for (const worker of workers) {
@@ -105,8 +108,12 @@ registerTopicTrendAggregationScheduler(queues)
   .then(() => logger.info("registered topic-trend-aggregation scheduler"))
   .catch((error) => logger.error({ status: "error" }, `failed to register topic-trend-aggregation scheduler: ${String(error)}`));
 
+registerRecommendedScrapeScheduler(queues)
+  .then(() => logger.info("registered recommended-scrape scheduler"))
+  .catch((error) => logger.error({ status: "error" }, `failed to register recommended-scrape scheduler: ${String(error)}`));
+
 logger.info(
-  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation",
+  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation, recommended-scrape",
 );
 
 async function shutdown(): Promise<void> {

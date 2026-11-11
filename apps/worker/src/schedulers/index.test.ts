@@ -5,9 +5,13 @@ const { listEnabledDiscoveryQueriesWithMarket } = vi.hoisted(() => ({
 }));
 vi.mock("@yvi/db", () => ({ listEnabledDiscoveryQueriesWithMarket }));
 
+import { QUEUE_NAMES } from "@yvi/shared";
+import type { Queues } from "../queues/index";
 import {
   packageMarker,
+  RECOMMENDED_SCRAPE_SCHEDULER_ID,
   registerDiscoverySchedulers,
+  registerRecommendedScrapeScheduler,
   registerTopicNormalizationScheduler,
   registerTopicTrendAggregationScheduler,
   registerVideoClassificationScheduler,
@@ -134,6 +138,21 @@ describe("registerTopicTrendAggregationScheduler", () => {
       TOPIC_TREND_AGGREGATION_SCHEDULER_ID,
       { every: 24 * 60 * 60 * 1000 },
       expect.objectContaining({ data: {} }),
+    );
+  });
+});
+
+describe("registerRecommendedScrapeScheduler", () => {
+  it("registers a repeatable job scheduler every 6 hours", async () => {
+    const upsertJobScheduler = vi.fn();
+    const queues = { recommendedScrape: { upsertJobScheduler } } as unknown as Queues;
+
+    await registerRecommendedScrapeScheduler(queues);
+
+    expect(upsertJobScheduler).toHaveBeenCalledWith(
+      RECOMMENDED_SCRAPE_SCHEDULER_ID,
+      { every: 6 * 60 * 60 * 1000 },
+      { name: QUEUE_NAMES.recommendedScrape, data: {} },
     );
   });
 });

@@ -146,3 +146,17 @@ export async function registerTopicTrendAggregationScheduler(queues: Queues): Pr
     { name: QUEUE_NAMES.topicTrendAggregation, data: {} },
   );
 }
+
+/** Fixed id for the single recommended-scrape tick — same single-static-id pattern as `VIDEO_SCORING_SCHEDULER_ID` (plan Decisions). */
+export const RECOMMENDED_SCRAPE_SCHEDULER_ID = "recommended-scrape-tick";
+
+const RECOMMENDED_SCRAPE_TICK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** Registers the single repeatable recommended-scrape tick (idempotent, same as `registerVideoScoringScheduler`). */
+export async function registerRecommendedScrapeScheduler(queues: Queues): Promise<void> {
+  await queues.recommendedScrape.upsertJobScheduler(
+    RECOMMENDED_SCRAPE_SCHEDULER_ID,
+    { every: RECOMMENDED_SCRAPE_TICK_INTERVAL_MS },
+    { name: QUEUE_NAMES.recommendedScrape, data: {} },
+  );
+}
