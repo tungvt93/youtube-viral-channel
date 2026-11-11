@@ -6,6 +6,7 @@ import {
   recordApiUsage,
   upsertVideo,
 } from "@yvi/db";
+import type { Prisma } from "@yvi/db";
 import { classifyFormat, QUOTA_COST, YouTubeApiError } from "@yvi/youtube-client";
 import type { VideoEnrichmentJobData } from "@yvi/shared";
 import { enqueueWithJobRun } from "../job-helpers";
@@ -114,7 +115,7 @@ export function createVideoEnrichmentProcessor(deps: ProcessorDeps) {
           source: job.data.source,
           sourceRank: rankByVideoId.get(video.videoId) ?? null,
           discoveredAt: new Date(job.data.discoveredAt),
-          sourcePayload: job.data.sourcePayload ?? null,
+          sourcePayload: (job.data.sourcePayload ?? null) as Prisma.InputJsonValue | null,
         });
       }
 

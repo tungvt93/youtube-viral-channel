@@ -4,7 +4,7 @@ export function packageMarker(): string {
 
 export { prisma } from "./client";
 export type { PrismaClient } from "./client";
-export type { VideoSnapshot } from "../generated/client";
+export type { Prisma, VideoSnapshot } from "../generated/client";
 
 export { getMarketByCode, getMarketById, listEnabledMarkets } from "./repositories/markets";
 
