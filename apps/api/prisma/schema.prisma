@@ -90,6 +90,7 @@ model Video {
   monitoringState       String   @default("candidate") @map("monitoring_state") @db.VarChar(20)
   lastSnapshotAt        DateTime? @map("last_snapshot_at")
   nextSnapshotDueAt     DateTime @default(now()) @map("next_snapshot_due_at")
+  recommendedScrapedAt  DateTime? @map("recommended_scraped_at")
 
   /// Raw snippet.tags strings from videos.list (PRD §10 topic classification input) — free text, not yet matched to Topic rows.
   tags                  String[] @default([])
