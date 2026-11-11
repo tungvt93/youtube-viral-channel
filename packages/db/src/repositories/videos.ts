@@ -260,3 +260,93 @@ export function listChannelPeerViews(db: PrismaClient, channelId: string, limit:
     })
     .then((rows) => rows.map((row) => ({ videoId: row.id, currentViewCount: row.currentViewCount as bigint })));
 }
+
+export interface RecommendedScrapeSeed {
+  videoId: string;
+  youtubeVideoId: string;
+  gl: string;
+  hl: string;
+  rootSeedVideoId: string;
+}
+
+/**
+ * Candidate pool for a recommended-scrape tick: `candidate`/`monitoring`
+ * videos never yet scraped for recommendations, oldest-discovered first.
+ * Each seed's `gl`/`hl` (the YouTube `videos.list` region/language params to
+ * scrape it with) and `rootSeedVideoId` (for scrape-depth bookkeeping) are
+ * resolved from its earliest `DiscoveryEvent`: a first-generation seed takes
+ * `gl`/`hl` from that event's `Market` and is its own root; a seed that was
+ * itself discovered via a prior recommended-scrape instead reuses the
+ * lineage recorded verbatim on that event's `sourcePayload` (the shape Task
+ * 6's `recommended-scrape.ts` writes as `ScrapeLineage`). A seed is skipped
+ * when its earliest event has no resolvable market, or a recommended_scrape
+ * origin's `sourcePayload` is missing/malformed.
+ */
+export async function listRecommendedScrapeSeeds(db: PrismaClient, limit: number): Promise<RecommendedScrapeSeed[]> {
+  const rows = await db.video.findMany({
+    where: { monitoringState: { in: ["candidate", "monitoring"] }, recommendedScrapedAt: null },
+    orderBy: { firstDiscoveredAt: "asc" },
+    take: limit,
+    select: {
+      id: true,
+      youtubeVideoId: true,
+      discoveryEvents: {
+        orderBy: { discoveredAt: "asc" },
+        take: 1,
+        select: { source: true, sourcePayload: true, market: { select: { code: true, defaultLanguage: true } } },
+      },
+    },
+  });
+
+  const seeds: RecommendedScrapeSeed[] = [];
+  for (const row of rows) {
+    const earliestEvent = row.discoveryEvents[0];
+    if (!earliestEvent) {
+      continue;
+    }
+
+    if (earliestEvent.source === "recommended_scrape") {
+      const lineage = earliestEvent.sourcePayload as { gl?: unknown; hl?: unknown; rootSeedVideoId?: unknown } | null;
+      const { gl, hl, rootSeedVideoId } = lineage ?? {};
+      if (typeof gl !== "string" || typeof hl !== "string" || typeof rootSeedVideoId !== "string") {
+        continue;
+      }
+      seeds.push({ videoId: row.id, youtubeVideoId: row.youtubeVideoId, gl, hl, rootSeedVideoId });
+      continue;
+    }
+
+    if (!earliestEvent.market) {
+      continue;
+    }
+    seeds.push({
+      videoId: row.id,
+      youtubeVideoId: row.youtubeVideoId,
+      gl: earliestEvent.market.code,
+      hl: earliestEvent.market.defaultLanguage,
+      rootSeedVideoId: row.id,
+    });
+  }
+  return seeds;
+}
+
+/** Records that a seed's recommendations have been scraped (PRD's recommended-scrape worker), so it isn't re-selected by `listRecommendedScrapeSeeds`. */
+export async function markVideoRecommendedScraped(db: PrismaClient, videoId: string, scrapedAt: Date): Promise<void> {
+  await db.video.update({ where: { id: videoId }, data: { recommendedScrapedAt: scrapedAt } });
+}
+
+/**
+ * Which of the given YouTube video ids already have an internal video row,
+ * mapped `youtubeVideoId -> id` — used by the recommended-scrape worker to
+ * tell already-known recommended videos from ones needing enrichment,
+ * without one `getVideoByYoutubeId` call per id.
+ */
+export async function getVideoIdsByYoutubeIds(db: PrismaClient, youtubeVideoIds: string[]): Promise<Map<string, string>> {
+  if (youtubeVideoIds.length === 0) {
+    return new Map();
+  }
+  const rows = await db.video.findMany({
+    where: { youtubeVideoId: { in: youtubeVideoIds } },
+    select: { id: true, youtubeVideoId: true },
+  });
+  return new Map(rows.map((row) => [row.youtubeVideoId, row.id]));
+}
