@@ -6,7 +6,7 @@ export { prisma } from "./client";
 export type { PrismaClient } from "./client";
 export type { VideoSnapshot } from "../generated/client";
 
-export { getMarketById, listEnabledMarkets } from "./repositories/markets";
+export { getMarketByCode, getMarketById, listEnabledMarkets } from "./repositories/markets";
 
 export {
   getDiscoveryQueryById,
