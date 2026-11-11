@@ -17,8 +17,8 @@ describe("fetchWatchPageHtml", () => {
   it("throws WatchPageFetchError on a non-200 response", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 429, text: () => Promise.resolve("") });
 
-    await expect(
-      fetchWatchPageHtml("vid123", "US", "en", fetchImpl as unknown as typeof fetch)
-    ).rejects.toMatchObject({ status: 429 });
+    const call = fetchWatchPageHtml("vid123", "US", "en", fetchImpl as unknown as typeof fetch);
+    await expect(call).rejects.toBeInstanceOf(WatchPageFetchError);
+    await expect(call).rejects.toMatchObject({ status: 429 });
   });
 });
