@@ -13,7 +13,7 @@ export function listEnabledDiscoveryQueriesWithMarket(db: PrismaClient): Promise
   });
 }
 
-/** `GET /discovery/queries` backing query (PRD §16.6) — unlike `listEnabledDiscoveryQueriesWithMarket`, admin needs to see disabled queries too. */
+/** `GET /markets/:id/health` backing query (`MarketsService.health`) — unlike `listEnabledDiscoveryQueriesWithMarket`, it must count disabled queries too. */
 export function listDiscoveryQueriesWithMarket(db: PrismaClient): Promise<DiscoveryQueryWithMarket[]> {
   return db.discoveryQuery.findMany({
     orderBy: { createdAt: "desc" },
@@ -37,7 +37,7 @@ export interface CreateDiscoveryQueryInput {
   enabled: boolean;
 }
 
-/** `POST /discovery/queries` backing write (PRD §16.6, FR-DIS-01). */
+/** Retired per decision 0005 (the `/discovery/queries` routes it backed are gone); kept for schema compatibility with existing `DiscoveryQuery` rows. */
 export function createDiscoveryQuery(db: PrismaClient, input: CreateDiscoveryQueryInput): Promise<DiscoveryQueryWithMarket> {
   return db.discoveryQuery.create({ data: input, include: { market: true } });
 }
@@ -50,7 +50,7 @@ export interface UpdateDiscoveryQueryInput {
   enabled?: boolean;
 }
 
-/** `PATCH /discovery/queries/:id` backing write — only these typed fields, never the raw `config` JSON column (see plan Decisions). */
+/** Retired alongside `createDiscoveryQuery` — only these typed fields, never the raw `config` JSON column (see plan Decisions). */
 export function updateDiscoveryQuery(
   db: PrismaClient,
   id: string,
