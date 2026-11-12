@@ -11,10 +11,7 @@ vi.mock("next/cache", () => ({
 }));
 
 function mockVideosResponse(response: { items: unknown[]; total: number; limit: number; offset: number }): void {
-  vi.mocked(fetchApi).mockImplementation(async (path: string) => {
-    if (path.startsWith("/videos")) return response as never;
-    return [] as never;
-  });
+  vi.mocked(fetchApi).mockResolvedValue(response as never);
 }
 
 describe("VideosPage", () => {
@@ -39,7 +36,6 @@ describe("VideosPage", () => {
         format: "short_candidate",
         lifecycle: "monitoring",
         topicId: "topic-1",
-        discoveryQueryId: "query-1",
         channelTier: "breakout",
         minViews: "1000",
         minScore: "50",
@@ -52,7 +48,6 @@ describe("VideosPage", () => {
     expect(calledWith).toContain("format=short_candidate");
     expect(calledWith).toContain("lifecycle=monitoring");
     expect(calledWith).toContain("topicId=topic-1");
-    expect(calledWith).toContain("discoveryQueryId=query-1");
     expect(calledWith).toContain("channelTier=breakout");
     expect(calledWith).toContain("minViews=1000");
     expect(calledWith).toContain("minScore=50");

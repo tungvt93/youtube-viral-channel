@@ -6,7 +6,7 @@ import styles from "./videos.module.css";
 import { starVideo, unstarVideo } from "./actions";
 
 /** `GET /videos`/`POST /videos/export` share these filter fields (plan Scope: export uses "same filters as `GET /videos`") — the Export CSV form below forwards the same values as hidden inputs. */
-const FILTER_KEYS = ["marketId", "format", "lifecycle", "topicId", "discoveryQueryId", "channelTier", "minViews", "minScore", "watchlistedOnly"] as const;
+const FILTER_KEYS = ["marketId", "format", "lifecycle", "topicId", "channelTier", "minViews", "minScore", "watchlistedOnly"] as const;
 
 /** `Video.formatClassification` values (packages/youtube-client's `FormatClassification`), duplicated here for the filter <select> the same way `CHANNEL_TIERS` is duplicated in the channels list page. */
 const VIDEO_FORMATS = ["unknown", "short_candidate", "long"];
@@ -16,12 +16,6 @@ const LIFECYCLE_STATES = ["candidate", "monitoring", "high_signal", "cooling", "
 
 /** `Channel.channelTier` values, duplicated from the channels list page's `CHANNEL_TIERS`. */
 const CHANNEL_TIERS = ["newcomer", "rising", "breakout", "established", "cooling"];
-
-interface DiscoveryQueryDto {
-  id: string;
-  marketCode: string;
-  query: string;
-}
 
 interface VideoListItemDto {
   id: string;
@@ -49,7 +43,6 @@ interface VideosSearchParams {
   format?: string;
   lifecycle?: string;
   topicId?: string;
-  discoveryQueryId?: string;
   channelTier?: string;
   minViews?: string;
   minScore?: string;
@@ -74,7 +67,6 @@ export default async function VideosPage({ searchParams }: { searchParams: Video
   if (searchParams.format) params.set("format", searchParams.format);
   if (searchParams.lifecycle) params.set("lifecycle", searchParams.lifecycle);
   if (searchParams.topicId) params.set("topicId", searchParams.topicId);
-  if (searchParams.discoveryQueryId) params.set("discoveryQueryId", searchParams.discoveryQueryId);
   if (searchParams.channelTier) params.set("channelTier", searchParams.channelTier);
   if (searchParams.minViews) params.set("minViews", searchParams.minViews);
   if (searchParams.minScore) params.set("minScore", searchParams.minScore);
@@ -85,10 +77,7 @@ export default async function VideosPage({ searchParams }: { searchParams: Video
   params.set("offset", String(offset));
   const query = params.toString();
 
-  const [{ items: videos, total }, discoveryQueries] = await Promise.all([
-    fetchApi<VideoListResponseDto>(`/videos?${query}`),
-    fetchApi<DiscoveryQueryDto[]>("/discovery/queries"),
-  ]);
+  const { items: videos, total } = await fetchApi<VideoListResponseDto>(`/videos?${query}`);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -123,14 +112,6 @@ export default async function VideosPage({ searchParams }: { searchParams: Video
           ))}
         </select>
         <input type="text" name="topicId" placeholder="Topic ID" defaultValue={searchParams.topicId ?? ""} />
-        <select name="discoveryQueryId" defaultValue={searchParams.discoveryQueryId ?? ""}>
-          <option value="">All discovery queries</option>
-          {discoveryQueries.map((discoveryQuery) => (
-            <option key={discoveryQuery.id} value={discoveryQuery.id}>
-              {discoveryQuery.marketCode} · {discoveryQuery.query}
-            </option>
-          ))}
-        </select>
         <select name="channelTier" defaultValue={searchParams.channelTier ?? ""}>
           <option value="">All channel sizes</option>
           {CHANNEL_TIERS.map((value) => (

@@ -4,7 +4,7 @@ import { callApiRaw } from "../../../../lib/api";
 import { SESSION_COOKIE_NAME } from "../../../../lib/session";
 
 /** Mirrors the videos list page's `FILTER_KEYS` — kept in sync manually since this route only ever reads the hidden inputs that page's export `<form>` submits. */
-const FILTER_KEYS = ["marketId", "format", "lifecycle", "topicId", "discoveryQueryId", "channelTier", "minViews", "minScore", "watchlistedOnly"] as const;
+const FILTER_KEYS = ["marketId", "format", "lifecycle", "topicId", "channelTier", "minViews", "minScore", "watchlistedOnly"] as const;
 
 /**
  * BFF CSV export proxy — the one deliberate exception to "no new route
