@@ -116,6 +116,26 @@ describe("createVideoEnrichmentProcessor", () => {
     expect(finishJobRun).toHaveBeenCalledWith(deps.db, expect.objectContaining({ id: "run-1", status: "failed" }));
   });
 
+  it("reports the quota-guard message as errorMessage without rethrowing", async () => {
+    checkQuotaGuard.mockResolvedValue({ allowed: false, remaining: 0, projectedUsage: 10001 });
+    const listVideosByIds = vi.fn();
+    const logger = makeLogger();
+    const deps = { db: {} as never, ai: {} as never, aiModel: "unused", youtube: { listVideosByIds } as never, queues: {} as never, logger: logger as never };
+
+    const processor = createVideoEnrichmentProcessor(deps);
+    const result = await processor(makeJob([{ videoId: "v1", sourceRank: 0 }]));
+
+    expect(result).toEqual({ enriched: 0 });
+    expect(finishJobRun).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({
+        id: "run-1",
+        status: "failed",
+        errorMessage: "quota guard: projected usage 10001 exceeds daily budget",
+      }),
+    );
+  });
+
   it("passes job.data.sourcePayload through to createDiscoveryEvent, defaulting to null when absent", async () => {
     checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9999, projectedUsage: 1 });
     ensureChannelStub.mockResolvedValue({ id: "internal-channel-1" });

@@ -1,19 +1,9 @@
 import type { Job } from "bullmq";
-import {
-  createDiscoveryEvent,
-  ensureChannelStub,
-  finishJobRun,
-  recordApiUsage,
-  upsertVideo,
-} from "@yvi/db";
-import type { Prisma } from "@yvi/db";
-import { classifyFormat, QUOTA_COST, YouTubeApiError } from "@yvi/youtube-client";
+import { finishJobRun } from "@yvi/db";
+import { YouTubeApiError } from "@yvi/youtube-client";
 import type { VideoEnrichmentJobData } from "@yvi/shared";
-import { enqueueWithJobRun } from "../job-helpers";
 import type { ProcessorDeps } from "./deps";
-import { checkQuotaGuard } from "./quota";
-
-const ENDPOINT = "videos.list(byId)";
+import { enrichVideoIds, QuotaGuardBlockedError, type EnrichVideoIdsProgress } from "./lib/enrich-videos";
 
 /**
  * Enriches a batch of up to 50 video ids discovered in one page by a
@@ -29,116 +19,49 @@ export function createVideoEnrichmentProcessor(deps: ProcessorDeps) {
     const log = deps.logger.child({ jobId: job.id, queue: "video-enrichment" });
 
     const ids = job.data.items.map((item) => item.videoId);
-    const batches = Math.ceil(ids.length / 50);
-
-    const guard = await checkQuotaGuard(deps.db, QUOTA_COST.videos_list * batches, startedAt);
-    if (!guard.allowed) {
-      log.warn({ status: "blocked", quotaEstimate: guard.projectedUsage }, "quota guard blocked video-enrichment run");
-      await finishJobRun(deps.db, {
-        id: job.data.jobRunId,
-        status: "failed",
-        finishedAt: now(),
-        durationMs: 0,
-        resultCount: null,
-        errorMessage: `quota guard: projected usage ${guard.projectedUsage} exceeds daily budget`,
-      });
-      return { enriched: 0 };
-    }
+    const rankByVideoId = new Map(job.data.items.map((item) => [item.videoId, item.sourceRank]));
+    const progress: EnrichVideoIdsProgress = { savedVideos: [], discoveredChannelIds: new Set() };
 
     try {
-      let result;
-      try {
-        result = await deps.youtube.listVideosByIds(ids, { includePlayer: true, maxHeight: 200 });
-        await recordApiUsage(deps.db, {
-          endpoint: ENDPOINT,
-          quotaEstimate: QUOTA_COST.videos_list * result.callsMade,
-          status: "success",
-          marketId: job.data.marketId,
-          requestTime: now(),
-        });
-      } catch (error) {
-        await recordApiUsage(deps.db, {
-          endpoint: ENDPOINT,
-          quotaEstimate: QUOTA_COST.videos_list * batches,
-          status: "error",
-          marketId: job.data.marketId,
-          requestTime: now(),
-        });
-        throw error;
-      }
-
-      const rankByVideoId = new Map(job.data.items.map((item) => [item.videoId, item.sourceRank]));
-      const discoveredChannelIds = new Set<string>();
-
-      for (const video of result.items) {
-        const classification = classifyFormat({
-          durationSeconds: video.durationSeconds,
-          title: video.title,
-          description: video.description,
-          embedWidth: video.embedWidth,
-          embedHeight: video.embedHeight,
-        });
-
-        let internalChannelId: string | null = null;
-        if (video.channelId) {
-          const channelStub = await ensureChannelStub(deps.db, video.channelId);
-          internalChannelId = channelStub.id;
-          discoveredChannelIds.add(video.channelId);
-        }
-
-        const savedVideo = await upsertVideo(deps.db, {
-          youtubeVideoId: video.videoId,
-          channelId: internalChannelId,
-          title: video.title,
-          description: video.description,
-          publishedAt: new Date(video.publishedAt),
-          durationSeconds: video.durationSeconds,
-          categoryId: video.categoryId,
-          defaultLanguage: video.defaultLanguage ?? null,
-          thumbnailUrl: video.thumbnailUrl ?? null,
-          currentViewCount: video.viewCount !== undefined ? BigInt(video.viewCount) : null,
-          currentLikeCount: video.likeCount !== undefined ? BigInt(video.likeCount) : null,
-          currentCommentCount: video.commentCount !== undefined ? BigInt(video.commentCount) : null,
-          videoLicense: video.videoLicense ?? null,
-          privacyStatus: video.privacyStatus ?? null,
-          embeddable: video.embeddable ?? null,
-          liveBroadcastContent: video.liveBroadcastContent ?? null,
-          formatClassification: classification.classification,
-          formatConfidence: classification.confidence,
-          tags: video.tags ?? [],
-        });
-
-        await createDiscoveryEvent(deps.db, {
-          videoId: savedVideo.id,
+      await enrichVideoIds(
+        deps,
+        {
+          ids,
+          rankByVideoId,
           marketId: job.data.marketId,
           discoveryQueryId: job.data.discoveryQueryId,
           source: job.data.source,
-          sourceRank: rankByVideoId.get(video.videoId) ?? null,
           discoveredAt: new Date(job.data.discoveredAt),
-          sourcePayload: (job.data.sourcePayload ?? null) as Prisma.InputJsonValue | null,
-        });
-      }
-
-      if (discoveredChannelIds.size > 0) {
-        await enqueueWithJobRun(
-          deps.db,
-          deps.queues.channelEnrichment,
-          "channel-enrichment",
-          { youtubeChannelIds: Array.from(discoveredChannelIds) },
-          `${job.data.jobRunId}:channels`,
-        );
-      }
+          sourcePayload: job.data.sourcePayload,
+          jobRunId: job.data.jobRunId,
+        },
+        progress,
+        now,
+      );
 
       await finishJobRun(deps.db, {
         id: job.data.jobRunId,
         status: "completed",
         finishedAt: now(),
         durationMs: now().getTime() - startedAt.getTime(),
-        resultCount: result.items.length,
+        resultCount: progress.savedVideos.length,
         errorMessage: null,
       });
-      return { enriched: result.items.length };
+      return { enriched: progress.savedVideos.length };
     } catch (error) {
+      if (error instanceof QuotaGuardBlockedError) {
+        log.warn({ status: "blocked", quotaEstimate: error.projectedUsage }, "quota guard blocked video-enrichment run");
+        await finishJobRun(deps.db, {
+          id: job.data.jobRunId,
+          status: "failed",
+          finishedAt: now(),
+          durationMs: 0,
+          resultCount: null,
+          errorMessage: error.message,
+        });
+        return { enriched: 0 };
+      }
+
       const message = error instanceof YouTubeApiError ? `${error.code}: ${error.message}` : String(error);
       log.error({ status: "error", errorCode: error instanceof YouTubeApiError ? error.code : "unknown" }, message);
       await finishJobRun(deps.db, {
