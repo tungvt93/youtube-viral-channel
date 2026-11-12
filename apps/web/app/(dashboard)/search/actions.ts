@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ApiError, fetchApi } from "../../../lib/api";
 
+/** Revalidated with `"layout"` (same reasoning as `starVideo`) so the sidebar's unseen badge, which lives in the `(dashboard)` layout segment, re-renders too. */
 export async function createKeywordSearch(formData: FormData): Promise<void> {
   const body = {
     query: String(formData.get("query") ?? ""),
@@ -22,10 +23,10 @@ export async function createKeywordSearch(formData: FormData): Promise<void> {
     }
     throw error;
   }
-  revalidatePath("/search");
+  revalidatePath("/search", "layout");
 }
 
 export async function ackKeywordSearch(id: string): Promise<void> {
   await fetchApi(`/keyword-searches/${id}/ack`, { method: "POST" });
-  revalidatePath("/search");
+  revalidatePath("/search", "layout");
 }

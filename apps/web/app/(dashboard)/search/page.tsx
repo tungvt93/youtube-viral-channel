@@ -2,6 +2,7 @@ import { fetchApi } from "../../../lib/api";
 import tableStyles from "../../../components/data-table.module.css";
 import styles from "./search.module.css";
 import { ackKeywordSearch, createKeywordSearch } from "./actions";
+import { SearchAutoRefresh } from "./search-auto-refresh";
 
 interface KeywordSearchDto {
   id: string;
@@ -33,9 +34,16 @@ export default async function SearchPage({ searchParams }: { searchParams: { err
     fetchApi<MarketDto[]>("/markets"),
   ]);
 
+  // `language` reaches a `VARCHAR(10)` column and YouTube's
+  // `relevanceLanguage`, so the form offers only the tags the configured
+  // markets actually declare rather than free text.
+  const languages = Array.from(new Set(markets.map((market) => market.defaultLanguage))).sort();
+  const hasUnfinishedSearch = history.some((row) => row.status === "queued" || row.status === "running");
+
   return (
     <div>
       <h1 className={styles.heading}>Search</h1>
+      <SearchAutoRefresh active={hasUnfinishedSearch} />
 
       {searchParams.error === "rate_limited" ? (
         <p className={styles.error}>Too many searches — wait a minute and try again.</p>
@@ -55,9 +63,19 @@ export default async function SearchPage({ searchParams }: { searchParams: { err
               </option>
             ))}
           </select>
-          <input type="text" name="language" placeholder="Language (e.g. en)" required />
+          <select name="language" required defaultValue="">
+            <option value="" disabled>
+              Language
+            </option>
+            {languages.map((language) => (
+              <option key={language} value={language}>
+                {language}
+              </option>
+            ))}
+          </select>
           <button type="submit">Search</button>
         </form>
+        <p className={styles.hint}>Searches short-form videos only.</p>
       </div>
 
       <div className={styles.panel}>

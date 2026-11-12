@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchApi } from "../lib/api";
+import { ApiError, fetchApi } from "../lib/api";
 import styles from "./sidebar.module.css";
 
 interface KeywordSearchDto {
@@ -20,7 +20,18 @@ const NAV_ITEMS: { label: string; href?: string }[] = [
 ];
 
 export async function Sidebar() {
-  const unseen = await fetchApi<KeywordSearchDto[]>("/keyword-searches?unseen=true");
+  // The sidebar renders in the `(dashboard)` layout segment itself, which
+  // `app/(dashboard)/error.tsx` does not cover — an unavailable badge count
+  // must not take every dashboard page down with it. A non-`ApiError` still
+  // propagates so `fetchApi`'s own `redirect("/login")` keeps working.
+  let unseenCount = 0;
+  try {
+    unseenCount = (await fetchApi<KeywordSearchDto[]>("/keyword-searches?unseen=true")).length;
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+  }
 
   return (
     <nav className={styles.sidebar} aria-label="Main navigation">
@@ -31,9 +42,9 @@ export async function Sidebar() {
             <li key={item.label}>
               <Link href={item.href} className={styles.link}>
                 {item.label}
-                {item.label === "Search" && unseen.length > 0 ? (
+                {item.label === "Search" && unseenCount > 0 ? (
                   <span className={styles.badge} data-testid="unseen-search-badge">
-                    {unseen.length}
+                    {unseenCount}
                   </span>
                 ) : null}
               </Link>

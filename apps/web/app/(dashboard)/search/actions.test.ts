@@ -47,7 +47,7 @@ describe("createKeywordSearch", () => {
         language: "en",
       }),
     });
-    expect(revalidatePath).toHaveBeenCalledWith("/search");
+    expect(revalidatePath).toHaveBeenCalledWith("/search", "layout");
   });
 
   it("redirects with a rate-limited flag on a 429", async () => {
@@ -86,6 +86,6 @@ describe("ackKeywordSearch", () => {
     await ackKeywordSearch("ks-1");
 
     expect(fetchApi).toHaveBeenCalledWith("/keyword-searches/ks-1/ack", { method: "POST" });
-    expect(revalidatePath).toHaveBeenCalledWith("/search");
+    expect(revalidatePath).toHaveBeenCalledWith("/search", "layout");
   });
 });
