@@ -61,7 +61,10 @@ export function finishKeywordSearch(db: PrismaClient, input: FinishKeywordSearch
 
 /** Idempotent: a row already acknowledged keeps its original `acknowledgedAt` instead of being overwritten by a later call. */
 export async function ackKeywordSearch(db: PrismaClient, id: string, now: Date): Promise<KeywordSearch> {
-  const existing = (await db.keywordSearch.findUnique({ where: { id } })) as KeywordSearch;
+  const existing = await db.keywordSearch.findUnique({ where: { id } });
+  if (!existing) {
+    throw new Error(`KeywordSearch not found: ${id}`);
+  }
   if (existing.acknowledgedAt) {
     return existing;
   }

@@ -107,7 +107,12 @@ export {
   listKeywordSearchesWithMarket,
   markKeywordSearchRunning,
 } from "./repositories/keyword-searches";
-export type { FinishKeywordSearchInput, KeywordSearchWithMarket } from "./repositories/keyword-searches";
+export type {
+  CreateKeywordSearchInput,
+  FinishKeywordSearchInput,
+  KeywordSearchWithMarket,
+  ListKeywordSearchesFilter,
+} from "./repositories/keyword-searches";
 export type { KeywordSearch } from "../generated/client";
 
 export {

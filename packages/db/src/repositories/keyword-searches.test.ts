@@ -118,4 +118,14 @@ describe("ackKeywordSearch", () => {
 
     expect(update).not.toHaveBeenCalled();
   });
+
+  it("throws a clear error instead of crashing on an unknown id", async () => {
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const update = vi.fn();
+    const db = { keywordSearch: { findUnique, update } } as unknown as PrismaClient;
+
+    await expect(ackKeywordSearch(db, "missing", new Date())).rejects.toThrow("KeywordSearch not found: missing");
+
+    expect(update).not.toHaveBeenCalled();
+  });
 });
