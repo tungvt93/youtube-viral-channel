@@ -54,6 +54,38 @@ describe("VideosPage", () => {
     expect(calledWith).toContain("watchlistedOnly=true");
   });
 
+  it("forwards keywordSearchId and fetches the originating search for the banner", async () => {
+    vi.mocked(fetchApi).mockImplementation(async (path: string) => {
+      if (path.startsWith("/videos?")) {
+        return { items: [], total: 0, limit: 20, offset: 0 } as never;
+      }
+      if (path === "/keyword-searches/ks-1") {
+        return { query: "cat videos" } as never;
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const result = await VideosPage({ searchParams: { keywordSearchId: "ks-1" } });
+
+    const videosCall = vi.mocked(fetchApi).mock.calls.find(([path]) => (path as string).startsWith("/videos?"));
+    expect(videosCall?.[0]).toContain("keywordSearchId=ks-1");
+    expect(fetchApi).toHaveBeenCalledWith("/keyword-searches/ks-1");
+    expect(result).toBeTruthy();
+  });
+
+  it("renders without throwing when the originating search lookup fails", async () => {
+    vi.mocked(fetchApi).mockImplementation(async (path: string) => {
+      if (path.startsWith("/videos?")) {
+        return { items: [], total: 0, limit: 20, offset: 0 } as never;
+      }
+      throw new Error("not found");
+    });
+
+    const result = await VideosPage({ searchParams: { keywordSearchId: "missing" } });
+
+    expect(result).toBeTruthy();
+  });
+
   it("renders without throwing when videos are returned", async () => {
     mockVideosResponse({
       items: [

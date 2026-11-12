@@ -57,7 +57,15 @@ describe("parseListQuery", () => {
 
   it("passes the other filters through when given", () => {
     const filter = parseListQuery(
-      { marketId: "market-1", format: "shorts", lifecycle: "monitoring", topicId: "topic-1", discoveryQueryId: "query-1", channelTier: "breakout" },
+      {
+        marketId: "market-1",
+        format: "shorts",
+        lifecycle: "monitoring",
+        topicId: "topic-1",
+        discoveryQueryId: "query-1",
+        keywordSearchId: "search-1",
+        channelTier: "breakout",
+      },
       "5",
       "10",
     );
@@ -67,6 +75,7 @@ describe("parseListQuery", () => {
       lifecycle: "monitoring",
       topicId: "topic-1",
       discoveryQueryId: "query-1",
+      keywordSearchId: "search-1",
       channelTier: "breakout",
       minViews: undefined,
       minScore: undefined,

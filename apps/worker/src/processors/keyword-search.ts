@@ -85,6 +85,7 @@ export function createKeywordSearchProcessor(deps: ProcessorDeps) {
             discoveryQueryId: null,
             source: "keyword_search",
             discoveredAt: now(),
+            sourcePayload: { keywordSearchId: job.data.keywordSearchId },
             jobRunId: job.data.jobRunId,
           },
           progress,

@@ -24,6 +24,7 @@ export class VideosController {
     @Query("lifecycle") lifecycle?: string,
     @Query("topicId") topicId?: string,
     @Query("discoveryQueryId") discoveryQueryId?: string,
+    @Query("keywordSearchId") keywordSearchId?: string,
     @Query("channelTier") channelTier?: string,
     @Query("minViews") minViews?: string,
     @Query("minScore") minScore?: string,
@@ -33,7 +34,7 @@ export class VideosController {
     @CurrentUser() user?: RequestUser,
   ) {
     return this.videosService.list(
-      { marketId, format, lifecycle, topicId, discoveryQueryId, channelTier, minViews, minScore, watchlistedOnly },
+      { marketId, format, lifecycle, topicId, discoveryQueryId, keywordSearchId, channelTier, minViews, minScore, watchlistedOnly },
       limit,
       offset,
       user?.id,

@@ -92,6 +92,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { err
                 <th>Started</th>
                 <th>Error</th>
                 <th></th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -104,6 +105,11 @@ export default async function SearchPage({ searchParams }: { searchParams: { err
                   <td>{row.recommendedVideosFound ?? "—"}</td>
                   <td>{row.createdAt.slice(0, 16).replace("T", " ")}</td>
                   <td>{row.errorMessage ?? "—"}</td>
+                  <td>
+                    {row.status === "completed" && (row.videosFound ?? 0) > 0 ? (
+                      <a href={`/videos?keywordSearchId=${row.id}`}>View videos</a>
+                    ) : null}
+                  </td>
                   <td>
                     {(row.status === "completed" || row.status === "failed") && row.acknowledgedAt === null ? (
                       <form action={ackKeywordSearch.bind(null, row.id)}>

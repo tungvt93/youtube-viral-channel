@@ -456,6 +456,19 @@ describe("listVideos", () => {
     expect(params).toEqual([20, 0, "query-1"]);
   });
 
+  it("adds the keyword search filter as an EXISTS subquery against discovery_events' source_payload", async () => {
+    const queryRawUnsafe = vi.fn().mockResolvedValue([]);
+    const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;
+
+    await listVideos(db, { keywordSearchId: "search-1", limit: 20, offset: 0 });
+
+    const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain(
+      "EXISTS (SELECT 1 FROM discovery_events de WHERE de.video_id = v.id AND de.source = 'keyword_search' AND de.source_payload->>'keywordSearchId' = $3)",
+    );
+    expect(params).toEqual([20, 0, "search-1"]);
+  });
+
   it("combines multiple filters, binding each to its own positional parameter in order", async () => {
     const queryRawUnsafe = vi.fn().mockResolvedValue([]);
     const db = { $queryRawUnsafe: queryRawUnsafe } as unknown as PrismaClient;

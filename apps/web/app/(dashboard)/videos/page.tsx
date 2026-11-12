@@ -6,7 +6,17 @@ import styles from "./videos.module.css";
 import { starVideo, unstarVideo } from "./actions";
 
 /** `GET /videos`/`POST /videos/export` share these filter fields (plan Scope: export uses "same filters as `GET /videos`") — the Export CSV form below forwards the same values as hidden inputs. */
-const FILTER_KEYS = ["marketId", "format", "lifecycle", "topicId", "channelTier", "minViews", "minScore", "watchlistedOnly"] as const;
+const FILTER_KEYS = [
+  "marketId",
+  "format",
+  "lifecycle",
+  "topicId",
+  "channelTier",
+  "minViews",
+  "minScore",
+  "watchlistedOnly",
+  "keywordSearchId",
+] as const;
 
 /** `Video.formatClassification` values (packages/youtube-client's `FormatClassification`), duplicated here for the filter <select> the same way `CHANNEL_TIERS` is duplicated in the channels list page. */
 const VIDEO_FORMATS = ["unknown", "short_candidate", "long"];
@@ -38,6 +48,11 @@ interface VideoListResponseDto {
   offset: number;
 }
 
+/** Just the `query` text from `GET /keyword-searches/:id`, for the "filtered by search" banner below. */
+interface KeywordSearchSummaryDto {
+  query: string;
+}
+
 interface VideosSearchParams {
   marketId?: string;
   format?: string;
@@ -47,6 +62,7 @@ interface VideosSearchParams {
   minViews?: string;
   minScore?: string;
   watchlistedOnly?: string;
+  keywordSearchId?: string;
   page?: string;
 }
 
@@ -71,13 +87,19 @@ export default async function VideosPage({ searchParams }: { searchParams: Video
   if (searchParams.minViews) params.set("minViews", searchParams.minViews);
   if (searchParams.minScore) params.set("minScore", searchParams.minScore);
   if (searchParams.watchlistedOnly) params.set("watchlistedOnly", searchParams.watchlistedOnly);
+  if (searchParams.keywordSearchId) params.set("keywordSearchId", searchParams.keywordSearchId);
   const filterQuery = params.toString();
 
   params.set("limit", String(PAGE_SIZE));
   params.set("offset", String(offset));
   const query = params.toString();
 
-  const { items: videos, total } = await fetchApi<VideoListResponseDto>(`/videos?${query}`);
+  const [{ items: videos, total }, originatingSearch] = await Promise.all([
+    fetchApi<VideoListResponseDto>(`/videos?${query}`),
+    searchParams.keywordSearchId
+      ? fetchApi<KeywordSearchSummaryDto>(`/keyword-searches/${searchParams.keywordSearchId}`).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -93,7 +115,17 @@ export default async function VideosPage({ searchParams }: { searchParams: Video
     <div>
       <h1 className={styles.heading}>Viral Videos</h1>
 
+      {searchParams.keywordSearchId ? (
+        <p className={styles.hint}>
+          Filtered to videos found by search: <strong>{originatingSearch?.query ?? searchParams.keywordSearchId}</strong> —{" "}
+          <Link href="/videos">Clear filter</Link>
+        </p>
+      ) : null}
+
       <form method="get" className={styles.filters}>
+        {searchParams.keywordSearchId ? (
+          <input type="hidden" name="keywordSearchId" value={searchParams.keywordSearchId} />
+        ) : null}
         <input type="text" name="marketId" placeholder="Market ID" defaultValue={searchParams.marketId ?? ""} />
         <select name="format" defaultValue={searchParams.format ?? ""}>
           <option value="">All formats</option>

@@ -79,6 +79,7 @@ export interface VideoFilterQuery {
   lifecycle?: string;
   topicId?: string;
   discoveryQueryId?: string;
+  keywordSearchId?: string;
   channelTier?: string;
   minViews?: string;
   minScore?: string;
@@ -95,6 +96,7 @@ function parseFilterFields(query: VideoFilterQuery, userId: string | undefined):
     lifecycle: query.lifecycle || undefined,
     topicId: query.topicId || undefined,
     discoveryQueryId: query.discoveryQueryId || undefined,
+    keywordSearchId: query.keywordSearchId || undefined,
     channelTier: query.channelTier || undefined,
     minViews,
     minScore: minScore !== undefined && Number.isFinite(minScore) ? minScore : undefined,

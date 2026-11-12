@@ -375,6 +375,8 @@ export interface VideoListFilter {
   topicId?: string;
   /** Restrict to videos found by this exact `discovery_queries.id` (PRD §16.3 "filter by discovery source") — mirrors `topicId`'s EXISTS shape against `discovery_events` instead of `video_topics`. */
   discoveryQueryId?: string;
+  /** Restrict to videos found by this exact `keyword_searches.id` (on-demand search's own "view results" drill-down) — same EXISTS shape as `discoveryQueryId`, matched against the `source_payload` JSON since `KeywordSearch` predates `DiscoveryQuery`'s dedicated column and reuses `discovery_events.source = 'keyword_search'` instead. */
+  keywordSearchId?: string;
   channelTier?: string;
   minViews?: bigint;
   minScore?: number;
@@ -446,6 +448,7 @@ function buildVideoFilterSql(filter: Omit<VideoListFilter, "limit" | "offset">, 
   if (filter.minScore !== undefined) addCondition("latest_score.viral_score >= ?", filter.minScore);
   if (filter.topicId) addCondition("EXISTS (SELECT 1 FROM video_topics vt WHERE vt.video_id = v.id AND vt.topic_id = ?)", filter.topicId);
   if (filter.discoveryQueryId) addCondition("EXISTS (SELECT 1 FROM discovery_events de WHERE de.video_id = v.id AND de.discovery_query_id = ?)", filter.discoveryQueryId);
+  if (filter.keywordSearchId) addCondition("EXISTS (SELECT 1 FROM discovery_events de WHERE de.video_id = v.id AND de.source = 'keyword_search' AND de.source_payload->>'keywordSearchId' = ?)", filter.keywordSearchId);
   if (filter.watchlistedOnly && watchlistExistsSql) conditions.push(watchlistExistsSql);
 
   return { whereClause: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", watchlistExistsSql };

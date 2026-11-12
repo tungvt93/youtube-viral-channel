@@ -13,6 +13,7 @@ describe("VideosController", () => {
       "monitoring",
       "topic-1",
       "query-1",
+      "search-1",
       "breakout",
       "1000",
       "50",
@@ -29,6 +30,7 @@ describe("VideosController", () => {
         lifecycle: "monitoring",
         topicId: "topic-1",
         discoveryQueryId: "query-1",
+        keywordSearchId: "search-1",
         channelTier: "breakout",
         minViews: "1000",
         minScore: "50",
@@ -45,10 +47,34 @@ describe("VideosController", () => {
     const list = vi.fn().mockResolvedValue([]);
     const controller = new VideosController({ list } as unknown as VideosService);
 
-    await controller.list(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await controller.list(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
 
     expect(list).toHaveBeenCalledWith(
-      { marketId: undefined, format: undefined, lifecycle: undefined, topicId: undefined, discoveryQueryId: undefined, channelTier: undefined, minViews: undefined, minScore: undefined, watchlistedOnly: undefined },
+      {
+        marketId: undefined,
+        format: undefined,
+        lifecycle: undefined,
+        topicId: undefined,
+        discoveryQueryId: undefined,
+        keywordSearchId: undefined,
+        channelTier: undefined,
+        minViews: undefined,
+        minScore: undefined,
+        watchlistedOnly: undefined,
+      },
       undefined,
       undefined,
       undefined,
