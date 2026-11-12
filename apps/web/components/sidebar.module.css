@@ -40,3 +40,15 @@
   color: var(--color-text-muted);
   cursor: default;
 }
+
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
