@@ -1,4 +1,5 @@
-import type { Job, Queue } from "bullmq";
+import { Queue, type Job } from "bullmq";
+import IORedis from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   applyTopicPromotion,
@@ -6,11 +7,10 @@ import {
   prisma,
   upsertVideoTopic,
 } from "@yvi/db";
-import type { ChannelEnrichmentJobData, DiscoveryJobData, VideoEnrichmentJobData } from "@yvi/shared";
+import { QUEUE_NAMES, type ChannelEnrichmentJobData, type KeywordSearchJobData } from "@yvi/shared";
 import {
   createChannelEnrichmentProcessor,
-  createDiscoverySearchProcessor,
-  createVideoEnrichmentProcessor,
+  createKeywordSearchProcessor,
   type ProcessorDeps,
 } from "@yvi/worker";
 import { startApi, type RunningApi } from "./api-process";
@@ -46,12 +46,16 @@ function createCapturingQueue(name: string): Queue & { lastCall: { jobName: stri
 
 describe("PRD §23.3 end-to-end flow", () => {
   const runMarker = makeRunMarker();
+  const query = `e2e fixture query ${runMarker}`;
   let api: RunningApi;
   let anonClient: HttpClient;
   let client: HttpClient;
+  let redis: IORedis;
+  let keywordSearchQueue: Queue;
   let marketId: string;
   let marketWasEnabled: boolean;
-  let discoveryQueryId: string;
+  let keywordSearchId: string;
+  let jobRunId: string;
   let sessionToken: string;
   let videoId: string;
   let internalChannelId: string;
@@ -60,6 +64,12 @@ describe("PRD §23.3 end-to-end flow", () => {
   beforeAll(async () => {
     api = await startApi(PORT);
     anonClient = createHttpClient(api.baseUrl);
+    redis = new IORedis({
+      host: process.env.REDIS_HOST ?? "localhost",
+      port: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
+      maxRetriesPerRequest: null,
+    });
+    keywordSearchQueue = new Queue(QUEUE_NAMES.keywordSearch, { connection: redis });
 
     const loginResponse = await anonClient.post("/auth/login", {
       email: process.env.ADMIN_EMAIL,
@@ -78,14 +88,18 @@ describe("PRD §23.3 end-to-end flow", () => {
     await prisma.video.deleteMany({ where: { id: videoId } }).catch(() => undefined);
     await prisma.channel.deleteMany({ where: { id: internalChannelId } }).catch(() => undefined);
     await prisma.topic.deleteMany({ where: { id: topicId } }).catch(() => undefined);
-    await prisma.discoveryQuery.deleteMany({ where: { id: discoveryQueryId } }).catch(() => undefined);
-    await prisma.jobRun.deleteMany({ where: { id: { startsWith: `e2e-${runMarker}` } } }).catch(() => undefined);
+    await prisma.keywordSearch.deleteMany({ where: { id: keywordSearchId } }).catch(() => undefined);
+    if (jobRunId) {
+      await prisma.jobRun.deleteMany({ where: { id: { startsWith: jobRunId } } }).catch(() => undefined);
+    }
     if (marketId !== undefined && marketWasEnabled !== undefined) {
       await prisma.market.update({ where: { id: marketId }, data: { enabled: marketWasEnabled } }).catch(() => undefined);
     }
     if (sessionToken) {
       await anonClient.post("/auth/logout").catch(() => undefined);
     }
+    await keywordSearchQueue?.close().catch(() => undefined);
+    await redis?.quit().catch(() => undefined);
     await api?.close();
   });
 
@@ -104,23 +118,29 @@ describe("PRD §23.3 end-to-end flow", () => {
     expect(updated.enabled).toBe(true);
   });
 
-  it("creates a discovery query", async () => {
-    const response = await client.post("/discovery/queries", {
-      marketId,
-      query: `e2e fixture query ${runMarker}`,
-      language: "en",
-      strategy: "search",
-      priority: 1,
-      maxPagesPerRun: 1,
-      frequencyMinutes: 60,
-      enabled: true,
-    });
+  /**
+   * The real enqueued job is removed again right away: this suite drives the
+   * processor itself, in-process, against the fake YouTube client, and a dev
+   * worker that happened to be running would otherwise pick the same job up
+   * and spend real `search.list` quota on the fixture query.
+   */
+  it("requests an on-demand keyword search", async () => {
+    const response = await client.post("/keyword-searches", { query, marketId, language: "en" });
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { id: string };
-    discoveryQueryId = body.id;
+    const body = (await response.json()) as { id: string; status: string };
+    keywordSearchId = body.id;
+    expect(body.status).toBe("queued");
+
+    const row = await prisma.keywordSearch.findUnique({ where: { id: keywordSearchId } });
+    expect(row?.jobRunId).toBeTruthy();
+    jobRunId = row!.jobRunId!;
+
+    const enqueued = await keywordSearchQueue.getJob(jobRunId);
+    expect(enqueued).not.toBeUndefined();
+    await enqueued!.remove();
   });
 
-  it("triggers discovery and discovers a video via the real worker processor chain", async () => {
+  it("runs the keyword search and discovers a video via the real worker processor chain", async () => {
     const { client: youtube } = createYoutubeFixture(runMarker);
     const videoEnrichmentQueue = createCapturingQueue("video-enrichment");
     const channelEnrichmentQueue = createCapturingQueue("channel-enrichment");
@@ -133,28 +153,25 @@ describe("PRD §23.3 end-to-end flow", () => {
       queues: { videoEnrichment: videoEnrichmentQueue, channelEnrichment: channelEnrichmentQueue } as never,
       logger: makeLogger(),
       now: () => new Date(),
+      // The processor's recommended-scrape step fetches real watch pages otherwise.
+      fetchImpl: async () => new Response("<html></html>"),
     };
 
-    const searchProcessor = createDiscoverySearchProcessor(deps);
-    const searchJob = {
-      id: `e2e-${runMarker}-search`,
-      name: "discovery-search",
-      data: { discoveryQueryId } satisfies DiscoveryJobData,
-    } as unknown as Job<DiscoveryJobData>;
-    const searchResult = await searchProcessor(searchJob);
-    expect(searchResult.discovered).toBe(1);
-    expect(videoEnrichmentQueue.lastCall).not.toBeNull();
+    const keywordSearchProcessor = createKeywordSearchProcessor(deps);
+    const keywordSearchJob = {
+      id: jobRunId,
+      name: QUEUE_NAMES.keywordSearch,
+      data: { jobRunId, keywordSearchId, query, marketId, language: "en" } satisfies KeywordSearchJobData,
+    } as unknown as Job<KeywordSearchJobData>;
+    const searchResult = await keywordSearchProcessor(keywordSearchJob);
+    expect(searchResult.videosFound).toBe(1);
 
-    const enrichmentProcessor = createVideoEnrichmentProcessor(deps);
-    const enrichmentJob = {
-      id: videoEnrichmentQueue.lastCall!.jobId,
-      name: "video-enrichment",
-      data: videoEnrichmentQueue.lastCall!.data as VideoEnrichmentJobData,
-    } as unknown as Job<VideoEnrichmentJobData>;
-    const enrichmentResult = await enrichmentProcessor(enrichmentJob);
-    expect(enrichmentResult.enriched).toBe(1);
+    const finishedSearch = await prisma.keywordSearch.findUnique({ where: { id: keywordSearchId } });
+    expect(finishedSearch?.status).toBe("completed");
+    expect(finishedSearch?.videosFound).toBe(1);
+    expect(finishedSearch?.errorMessage).toBeNull();
+
     expect(channelEnrichmentQueue.lastCall).not.toBeNull();
-
     const channelProcessor = createChannelEnrichmentProcessor(deps);
     const channelJob = {
       id: channelEnrichmentQueue.lastCall!.jobId,
@@ -168,6 +185,9 @@ describe("PRD §23.3 end-to-end flow", () => {
     expect(savedVideo).not.toBeNull();
     videoId = savedVideo!.id;
     internalChannelId = savedVideo!.channelId!;
+
+    const discoveryEvents = await prisma.discoveryEvent.findMany({ where: { videoId } });
+    expect(discoveryEvents.some((event) => event.source === "keyword_search")).toBe(true);
   });
 
   it("views the discovered video", async () => {

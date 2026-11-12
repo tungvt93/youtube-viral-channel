@@ -19,8 +19,8 @@ export interface FakeDiscoveredVideo {
 /**
  * Fake `YouTubeClient` fixture (plan Approach step 5): a single deterministic
  * video/channel pair per run, keyed off `runMarker`, routed through the real
- * `createDiscoverySearchProcessor` -> `createVideoEnrichmentProcessor` ->
- * `createChannelEnrichmentProcessor` chain — no real YouTube Data API call.
+ * `createKeywordSearchProcessor` -> `createChannelEnrichmentProcessor`
+ * chain — no real YouTube Data API call.
  */
 export function createYoutubeFixture(runMarker: string): {
   client: YouTubeClient;
