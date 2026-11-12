@@ -13,6 +13,7 @@ export const QUEUE_NAMES = {
   topicTrendAggregation: "topic-trend-aggregation",
   recommendedScrape: "recommended-scrape",
   systemAlerts: "system-alerts",
+  keywordSearch: "keyword-search",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -122,3 +123,17 @@ export type RecommendedScrapeJobData = Record<string, never>;
  * counts from scratch on every tick (plan Decisions, 2026-11-06).
  */
 export type SystemAlertsJobData = Record<string, never>;
+
+/**
+ * Unlike discovery-regional/search, the API pre-creates both the
+ * `KeywordSearch` row and its paired `JobRun` before enqueueing — this
+ * processor only ever calls `finishJobRun`, never `startJobRun` (same
+ * pattern as `VideoEnrichmentJobData`).
+ */
+export interface KeywordSearchJobData {
+  jobRunId: string;
+  keywordSearchId: string;
+  query: string;
+  marketId: string;
+  language: string;
+}

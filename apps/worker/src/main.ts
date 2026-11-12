@@ -13,6 +13,7 @@ import {
   createChannelVideoDiscoveryProcessor,
   createDiscoveryRegionalProcessor,
   createDiscoverySearchProcessor,
+  createKeywordSearchProcessor,
   createRecommendedScrapeProcessor,
   createSystemAlertsProcessor,
   createTopicNormalizationProcessor,
@@ -26,8 +27,6 @@ import {
 import {
   registerChannelScoringScheduler,
   registerChannelVideoDiscoveryScheduler,
-  registerDiscoverySchedulers,
-  registerRecommendedScrapeScheduler,
   registerSystemAlertsScheduler,
   registerTopicNormalizationScheduler,
   registerTopicTrendAggregationScheduler,
@@ -68,6 +67,7 @@ const workers = [
   new Worker(QUEUE_NAMES.topicTrendAggregation, createTopicTrendAggregationProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.recommendedScrape, createRecommendedScrapeProcessor(deps), { connection }),
   new Worker(QUEUE_NAMES.systemAlerts, createSystemAlertsProcessor(deps), { connection }),
+  new Worker(QUEUE_NAMES.keywordSearch, createKeywordSearchProcessor(deps), { connection }),
 ];
 
 for (const worker of workers) {
@@ -78,10 +78,6 @@ for (const worker of workers) {
 
 const port = process.env.WORKER_HEALTH_PORT ? Number(process.env.WORKER_HEALTH_PORT) : 3002;
 startHealthServer(connection, port);
-
-registerDiscoverySchedulers(prisma, queues)
-  .then((count) => logger.info({ count }, "registered discovery schedulers"))
-  .catch((error) => logger.error({ status: "error" }, `failed to register discovery schedulers: ${String(error)}`));
 
 registerVideoMonitoringScheduler(queues)
   .then(() => logger.info("registered video-monitoring scheduler"))
@@ -111,16 +107,12 @@ registerTopicTrendAggregationScheduler(queues)
   .then(() => logger.info("registered topic-trend-aggregation scheduler"))
   .catch((error) => logger.error({ status: "error" }, `failed to register topic-trend-aggregation scheduler: ${String(error)}`));
 
-registerRecommendedScrapeScheduler(queues)
-  .then(() => logger.info("registered recommended-scrape scheduler"))
-  .catch((error) => logger.error({ status: "error" }, `failed to register recommended-scrape scheduler: ${String(error)}`));
-
 registerSystemAlertsScheduler(queues)
   .then(() => logger.info("registered system-alerts scheduler"))
   .catch((error) => logger.error({ status: "error" }, `failed to register system-alerts scheduler: ${String(error)}`));
 
 logger.info(
-  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation, recommended-scrape, system-alerts",
+  "worker process started: discovery-regional, discovery-search, video-enrichment, channel-enrichment, video-monitoring, video-scoring, channel-video-discovery, channel-scoring, video-classification, topic-normalization, topic-trend-aggregation, recommended-scrape, system-alerts, keyword-search",
 );
 
 async function shutdown(): Promise<void> {

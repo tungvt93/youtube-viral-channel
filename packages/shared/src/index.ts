@@ -14,6 +14,7 @@ export type {
   ChannelScoringJobData,
   ChannelVideoDiscoveryJobData,
   DiscoveryJobData,
+  KeywordSearchJobData,
   QueueName,
   RecommendedScrapeJobData,
   SystemAlertsJobData,
