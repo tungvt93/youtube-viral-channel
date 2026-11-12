@@ -26,6 +26,7 @@ model Market {
   discoveryEvents  DiscoveryEvent[]
   trendSnapshots   TrendSnapshot[]
   apiUsageLogs     ApiUsageLog[]
+  keywordSearches  KeywordSearch[]
 
   @@map("markets")
 }
@@ -56,6 +57,30 @@ model DiscoveryQuery {
   @@index([marketId, enabled, priority])
   @@index([topicId])
   @@map("discovery_queries")
+}
+
+// ---------------------------------------------------------------------------
+// PRD §6.3/§16.6 amendment
+// ---------------------------------------------------------------------------
+model KeywordSearch {
+  id                      String    @id @default(uuid())
+  query                   String
+  marketId                String    @map("market_id")
+  language                String    @db.VarChar(10)
+  status                  String    @default("queued") @db.VarChar(20)
+  jobRunId                String?   @map("job_run_id")
+  videosFound             Int?      @map("videos_found")
+  recommendedVideosFound  Int?      @map("recommended_videos_found")
+  errorMessage            String?   @map("error_message")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  finishedAt              DateTime? @map("finished_at")
+  acknowledgedAt          DateTime? @map("acknowledged_at")
+
+  market                  Market    @relation(fields: [marketId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status, acknowledgedAt])
+  @@map("keyword_searches")
 }
 
 // ---------------------------------------------------------------------------

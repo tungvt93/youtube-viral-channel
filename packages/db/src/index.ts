@@ -100,6 +100,17 @@ export { finishJobRun, getJobRunById, listRecentJobRuns, startJobRun } from "./r
 export type { FinishJobRunInput, StartJobRunInput } from "./repositories/job-runs";
 
 export {
+  ackKeywordSearch,
+  createKeywordSearch,
+  finishKeywordSearch,
+  getKeywordSearchById,
+  listKeywordSearchesWithMarket,
+  markKeywordSearchRunning,
+} from "./repositories/keyword-searches";
+export type { FinishKeywordSearchInput, KeywordSearchWithMarket } from "./repositories/keyword-searches";
+export type { KeywordSearch } from "../generated/client";
+
+export {
   countFailedCallsToday,
   recordApiUsage,
   sumQuotaUsageByEndpoint,
