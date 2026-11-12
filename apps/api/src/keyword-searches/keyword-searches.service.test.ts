@@ -1,9 +1,20 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { ackKeywordSearch, createKeywordSearch, getKeywordSearchById, getMarketById, listKeywordSearchesWithMarket, startJobRun } = vi.hoisted(() => ({
+const {
+  ackKeywordSearch,
+  createKeywordSearch,
+  finishJobRun,
+  finishKeywordSearch,
+  getKeywordSearchById,
+  getMarketById,
+  listKeywordSearchesWithMarket,
+  startJobRun,
+} = vi.hoisted(() => ({
   ackKeywordSearch: vi.fn(),
   createKeywordSearch: vi.fn(),
+  finishJobRun: vi.fn(),
+  finishKeywordSearch: vi.fn(),
   getKeywordSearchById: vi.fn(),
   getMarketById: vi.fn(),
   listKeywordSearchesWithMarket: vi.fn(),
@@ -14,6 +25,8 @@ vi.mock("@yvi/db", () => ({
   prisma: {},
   ackKeywordSearch,
   createKeywordSearch,
+  finishJobRun,
+  finishKeywordSearch,
   getKeywordSearchById,
   getMarketById,
   listKeywordSearchesWithMarket,
@@ -63,6 +76,54 @@ describe("KeywordSearchesService", () => {
 
       await expect(service.create(body)).rejects.toThrow(BadRequestException);
       expect(getMarketById).not.toHaveBeenCalled();
+    });
+
+    it("rejects with BadRequestException when query is only whitespace", async () => {
+      const service = makeService();
+
+      await expect(service.create({ query: "   ", marketId: "market-1", language: "en" })).rejects.toThrow(BadRequestException);
+      expect(getMarketById).not.toHaveBeenCalled();
+    });
+
+    it.each(["English (US)", "e", "en_US", "toolonglanguage"])("rejects with BadRequestException for language %s", async (language) => {
+      const service = makeService();
+
+      await expect(service.create({ query: "q", marketId: "market-1", language })).rejects.toThrow(BadRequestException);
+      expect(getMarketById).not.toHaveBeenCalled();
+    });
+
+    it("trims the query before persisting and enqueueing it", async () => {
+      getMarketById.mockResolvedValue({ id: "market-1", code: "US", enabled: true });
+      startJobRun.mockResolvedValue({ id: "job-run-1" });
+      createKeywordSearch.mockResolvedValue(makeRow({ jobRunId: "job-run-1" }));
+      const keywordSearch = makeQueue();
+      const service = makeService(keywordSearch);
+
+      await service.create({ query: "  best budget cameras  ", marketId: "market-1", language: "en" });
+
+      expect(createKeywordSearch).toHaveBeenCalledWith({}, expect.objectContaining({ query: "best budget cameras" }));
+      expect(keywordSearch.add).toHaveBeenCalledWith(
+        "keyword-search",
+        expect.objectContaining({ query: "best budget cameras" }),
+        { jobId: "job-run-1" },
+      );
+    });
+
+    it("marks both rows failed and rethrows when the enqueue fails", async () => {
+      getMarketById.mockResolvedValue({ id: "market-1", code: "US", enabled: true });
+      startJobRun.mockResolvedValue({ id: "job-run-1" });
+      createKeywordSearch.mockResolvedValue(makeRow({ jobRunId: "job-run-1" }));
+      const keywordSearch = makeQueue();
+      keywordSearch.add.mockRejectedValue(new Error("redis unreachable"));
+      const service = makeService(keywordSearch);
+
+      await expect(service.create({ query: "q", marketId: "market-1", language: "en" })).rejects.toThrow("redis unreachable");
+
+      expect(finishKeywordSearch).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining({ id: "search-1", status: "failed", videosFound: 0, recommendedVideosFound: 0 }),
+      );
+      expect(finishJobRun).toHaveBeenCalledWith({}, expect.objectContaining({ id: "job-run-1", status: "failed", resultCount: null }));
     });
 
     it("rejects with NotFoundException when the market does not exist", async () => {

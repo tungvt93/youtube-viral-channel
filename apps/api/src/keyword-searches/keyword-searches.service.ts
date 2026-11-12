@@ -1,13 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleDestroy, Optional } from "@nestjs/common";
 import { Queue } from "bullmq";
 import type IORedis from "ioredis";
-import { ackKeywordSearch, createKeywordSearch, getKeywordSearchById, getMarketById, listKeywordSearchesWithMarket, prisma, startJobRun, type KeywordSearchWithMarket } from "@yvi/db";
+import { ackKeywordSearch, createKeywordSearch, finishJobRun, finishKeywordSearch, getKeywordSearchById, getMarketById, listKeywordSearchesWithMarket, prisma, startJobRun, type KeywordSearchWithMarket } from "@yvi/db";
 import { QUEUE_NAMES, type KeywordSearchJobData } from "@yvi/shared";
 import { createRedisConnection } from "../redis";
 
 /** Default/maximum page size for `GET /keyword-searches` — same reasoning as `AlertsService.parseListQuery`. */
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
+
+/** `KeywordSearch.language` is `VARCHAR(10)`, and the value is passed through as YouTube's `relevanceLanguage` — a BCP-47-shaped tag, not free text. */
+const LANGUAGE_PATTERN = /^[a-zA-Z-]{2,10}$/;
 
 export interface KeywordSearchDto {
   id: string;
@@ -69,8 +72,12 @@ export class KeywordSearchesService implements OnModuleDestroy {
 
   /** `POST /keyword-searches` — starts the `JobRun` first so its id can be stamped onto both the `KeywordSearch` row and the enqueued job. */
   async create(body: CreateKeywordSearchBody): Promise<KeywordSearchDto> {
-    if (!body?.query || !body.marketId || !body.language) {
+    const query = body?.query?.trim();
+    if (!query || !body.marketId || !body.language) {
       throw new BadRequestException("query, marketId, and language are required");
+    }
+    if (!LANGUAGE_PATTERN.test(body.language)) {
+      throw new BadRequestException("language must be a language tag such as en or pt-BR");
     }
     const market = await getMarketById(prisma, body.marketId);
     if (!market) {
@@ -80,11 +87,36 @@ export class KeywordSearchesService implements OnModuleDestroy {
       throw new BadRequestException(`market ${body.marketId} is disabled`);
     }
 
-    const jobRun = await startJobRun(prisma, { jobName: QUEUE_NAMES.keywordSearch, queue: QUEUE_NAMES.keywordSearch, startedAt: new Date() });
-    const row = await createKeywordSearch(prisma, { query: body.query, marketId: body.marketId, language: body.language, jobRunId: jobRun.id });
+    const startedAt = new Date();
+    const jobRun = await startJobRun(prisma, { jobName: QUEUE_NAMES.keywordSearch, queue: QUEUE_NAMES.keywordSearch, startedAt });
+    const row = await createKeywordSearch(prisma, { query, marketId: body.marketId, language: body.language, jobRunId: jobRun.id });
 
-    const jobData: KeywordSearchJobData = { jobRunId: jobRun.id, keywordSearchId: row.id, query: body.query, marketId: body.marketId, language: body.language };
-    await this.keywordSearch.add(QUEUE_NAMES.keywordSearch, jobData, { jobId: jobRun.id });
+    const jobData: KeywordSearchJobData = { jobRunId: jobRun.id, keywordSearchId: row.id, query, marketId: body.marketId, language: body.language };
+    try {
+      await this.keywordSearch.add(QUEUE_NAMES.keywordSearch, jobData, { jobId: jobRun.id });
+    } catch (error) {
+      // Both rows exist already, so an unreachable queue must not leave them
+      // stuck `queued`/`running` with no error for the user to see.
+      const message = `failed to enqueue keyword search: ${String(error)}`;
+      const finishedAt = new Date();
+      await finishKeywordSearch(prisma, {
+        id: row.id,
+        status: "failed",
+        videosFound: 0,
+        recommendedVideosFound: 0,
+        errorMessage: message,
+        finishedAt,
+      });
+      await finishJobRun(prisma, {
+        id: jobRun.id,
+        status: "failed",
+        finishedAt,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+        resultCount: null,
+        errorMessage: message,
+      });
+      throw error;
+    }
 
     return toDto(row);
   }

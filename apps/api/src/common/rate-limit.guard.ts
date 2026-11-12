@@ -7,12 +7,13 @@ interface RequestWithOptionalUser {
 }
 
 /**
- * Hand-rolled in-memory per-process rate limiter (PRD §16.8) applied to
- * `POST /videos/export` and `POST /discovery/queries/:id/run` — no new
- * dependency added (`@nestjs/throttler` is not installed anywhere in the
- * monorepo). Resets on process restart and does not coordinate across
- * instances; accepted because `apps/api` runs as a single process in this
- * repo (no `docker-compose.yml`/replica config) — see plan Risks.
+ * Hand-rolled in-memory per-process rate limiter (PRD §16.8) applied to every
+ * handler carrying `@RateLimit` (e.g. `POST /videos/export`,
+ * `POST /keyword-searches`) — no new dependency added (`@nestjs/throttler` is
+ * not installed anywhere in the monorepo). Resets on process restart and does
+ * not coordinate across instances; accepted because `apps/api` runs as a
+ * single process in this repo (no `docker-compose.yml`/replica config) — see
+ * plan Risks.
  */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
