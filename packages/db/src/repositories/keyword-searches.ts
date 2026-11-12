@@ -6,6 +6,7 @@ export interface CreateKeywordSearchInput {
   query: string;
   marketId: string;
   language: string;
+  jobRunId?: string | null;
 }
 
 export function createKeywordSearch(db: PrismaClient, input: CreateKeywordSearchInput): Promise<KeywordSearchWithMarket> {

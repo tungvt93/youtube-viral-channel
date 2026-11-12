@@ -4,7 +4,7 @@ import { LoggerModule } from "nestjs-pino";
 import { loggerConfig } from "./common/logger.config";
 import { AlertsModule } from "./alerts/alerts.module";
 import { HealthModule } from "./health/health.module";
-import { DiscoveryModule } from "./discovery/discovery.module";
+import { KeywordSearchesModule } from "./keyword-searches/keyword-searches.module";
 import { VideosModule } from "./videos/videos.module";
 import { ChannelsModule } from "./channels/channels.module";
 import { TopicsModule } from "./topics/topics.module";
@@ -21,7 +21,7 @@ import { SystemModule } from "./system/system.module";
   imports: [
     LoggerModule.forRoot(loggerConfig),
     HealthModule,
-    DiscoveryModule,
+    KeywordSearchesModule,
     VideosModule,
     ChannelsModule,
     TopicsModule,
