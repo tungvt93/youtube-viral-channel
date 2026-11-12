@@ -7,7 +7,7 @@ import {
   recordApiUsage,
   type RecommendedScrapeSeed,
 } from "@yvi/db";
-import { QUOTA_COST, YouTubeApiError } from "@yvi/youtube-client";
+import { QUOTA_COST, YouTubeApiError, type SearchListResult } from "@yvi/youtube-client";
 import { QUEUE_NAMES, type KeywordSearchJobData } from "@yvi/shared";
 import type { ProcessorDeps } from "./deps";
 import { checkQuotaGuard } from "./quota";
@@ -46,7 +46,7 @@ export function createKeywordSearchProcessor(deps: ProcessorDeps) {
         throw new QuotaGuardBlockedError(searchGuard.projectedUsage);
       }
 
-      let result;
+      let result: SearchListResult;
       try {
         result = await deps.youtube.search({
           q: job.data.query,
@@ -127,22 +127,32 @@ export function createKeywordSearchProcessor(deps: ProcessorDeps) {
             ? `${error.code}: ${error.message}`
             : String(error);
       log.error({ status: "error" }, message);
-      await finishKeywordSearch(deps.db, {
-        id: job.data.keywordSearchId,
-        status: "failed",
-        videosFound: progress.savedVideos.length,
-        recommendedVideosFound,
-        errorMessage: message,
-        finishedAt: now(),
-      });
-      await finishJobRun(deps.db, {
-        id: job.data.jobRunId,
-        status: "failed",
-        finishedAt: now(),
-        durationMs: now().getTime() - startedAt.getTime(),
-        resultCount: null,
-        errorMessage: message,
-      });
+      // Each finish write is isolated so a failing one (e.g. the row is already
+      // gone) can neither hide the other write nor replace `error` itself.
+      try {
+        await finishKeywordSearch(deps.db, {
+          id: job.data.keywordSearchId,
+          status: "failed",
+          videosFound: progress.savedVideos.length,
+          recommendedVideosFound,
+          errorMessage: message,
+          finishedAt: now(),
+        });
+      } catch (writeError) {
+        log.error({ status: "error" }, `failed to write KeywordSearch failure status: ${String(writeError)}`);
+      }
+      try {
+        await finishJobRun(deps.db, {
+          id: job.data.jobRunId,
+          status: "failed",
+          finishedAt: now(),
+          durationMs: now().getTime() - startedAt.getTime(),
+          resultCount: null,
+          errorMessage: message,
+        });
+      } catch (writeError) {
+        log.error({ status: "error" }, `failed to write JobRun failure status: ${String(writeError)}`);
+      }
       if (error instanceof QuotaGuardBlockedError) {
         return { videosFound: progress.savedVideos.length, recommendedVideosFound };
       }

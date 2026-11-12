@@ -6,9 +6,5 @@
  * step 5).
  */
 export type { ProcessorDeps } from "./processors/deps";
-export {
-  createChannelEnrichmentProcessor,
-  createDiscoverySearchProcessor,
-  createVideoEnrichmentProcessor,
-} from "./processors/index";
+export { createChannelEnrichmentProcessor, createKeywordSearchProcessor } from "./processors/index";
 export type { Queues } from "./queues/index";

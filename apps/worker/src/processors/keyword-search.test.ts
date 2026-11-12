@@ -312,4 +312,26 @@ describe("createKeywordSearchProcessor", () => {
     expect(finishKeywordSearch).toHaveBeenCalledWith(deps.db, expect.objectContaining({ status: "failed", errorMessage: "Error: network boom" }));
     expect(finishJobRun).toHaveBeenCalledWith(deps.db, expect.objectContaining({ status: "failed" }));
   });
+
+  it("still closes the JobRun, and rethrows the original error, when the KeywordSearch failure write itself throws", async () => {
+    checkQuotaGuard.mockResolvedValue({ allowed: true, remaining: 9999, projectedUsage: 100 });
+    getMarketById.mockResolvedValue(MARKET);
+    const search = vi.fn().mockRejectedValue(new Error("network boom"));
+    finishKeywordSearch.mockRejectedValueOnce(new Error("row is gone"));
+    const logger = makeLogger();
+    const deps = {
+      db: {} as never,
+      ai: {} as never,
+      aiModel: "unused",
+      youtube: { search } as never,
+      queues: {} as never,
+      logger: logger as never,
+      now: () => new Date("2026-11-12T00:00:00Z"),
+    };
+
+    const processor = createKeywordSearchProcessor(deps);
+
+    await expect(processor(makeJob())).rejects.toThrow("network boom");
+    expect(finishJobRun).toHaveBeenCalledWith(deps.db, expect.objectContaining({ status: "failed", errorMessage: "Error: network boom" }));
+  });
 });
