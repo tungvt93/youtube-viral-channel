@@ -99,22 +99,32 @@ export class KeywordSearchesService implements OnModuleDestroy {
       // stuck `queued`/`running` with no error for the user to see.
       const message = `failed to enqueue keyword search: ${String(error)}`;
       const finishedAt = new Date();
-      await finishKeywordSearch(prisma, {
-        id: row.id,
-        status: "failed",
-        videosFound: 0,
-        recommendedVideosFound: 0,
-        errorMessage: message,
-        finishedAt,
-      });
-      await finishJobRun(prisma, {
-        id: jobRun.id,
-        status: "failed",
-        finishedAt,
-        durationMs: finishedAt.getTime() - startedAt.getTime(),
-        resultCount: null,
-        errorMessage: message,
-      });
+      // Each finish write is independent so a failure in one (e.g. a DB
+      // hiccup) can't mask the other or replace the original enqueue error.
+      try {
+        await finishKeywordSearch(prisma, {
+          id: row.id,
+          status: "failed",
+          videosFound: 0,
+          recommendedVideosFound: 0,
+          errorMessage: message,
+          finishedAt,
+        });
+      } catch (finishError) {
+        console.error(`failed to mark keyword search ${row.id} as failed`, finishError);
+      }
+      try {
+        await finishJobRun(prisma, {
+          id: jobRun.id,
+          status: "failed",
+          finishedAt,
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+          resultCount: null,
+          errorMessage: message,
+        });
+      } catch (finishError) {
+        console.error(`failed to close job run ${jobRun.id} as failed`, finishError);
+      }
       throw error;
     }
 
