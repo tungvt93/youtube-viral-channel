@@ -31,13 +31,16 @@ export function createKeywordSearchProcessor(deps: ProcessorDeps) {
     const startedAt = now();
     const log = deps.logger.child({ jobId: job.id, queue: QUEUE_NAMES.keywordSearch });
 
-    await markKeywordSearchRunning(deps.db, job.data.keywordSearchId);
-    const market = await getMarketById(deps.db, job.data.marketId);
-
     const progress: EnrichVideoIdsProgress = { savedVideos: [], discoveredChannelIds: new Set() };
     let recommendedVideosFound = 0;
 
     try {
+      await markKeywordSearchRunning(deps.db, job.data.keywordSearchId);
+      const market = await getMarketById(deps.db, job.data.marketId);
+      if (!market) {
+        throw new Error(`market not found: ${job.data.marketId}`);
+      }
+
       const searchGuard = await checkQuotaGuard(deps.db, QUOTA_COST.search_list, startedAt);
       if (!searchGuard.allowed) {
         throw new QuotaGuardBlockedError(searchGuard.projectedUsage);
@@ -47,9 +50,9 @@ export function createKeywordSearchProcessor(deps: ProcessorDeps) {
       try {
         result = await deps.youtube.search({
           q: job.data.query,
-          regionCode: market?.code,
+          regionCode: market.code,
           relevanceLanguage: job.data.language,
-          order: "date",
+          order: "relevance",
           videoDuration: "short",
           maxResults: 50,
         });
@@ -91,9 +94,9 @@ export function createKeywordSearchProcessor(deps: ProcessorDeps) {
         const seeds: RecommendedScrapeSeed[] = progress.savedVideos.slice(0, MAX_SEEDS_PER_RUN).map((v) => ({
           videoId: v.id,
           youtubeVideoId: v.youtubeVideoId,
-          gl: market!.code,
+          gl: market.code,
           hl: job.data.language,
-          rootSeedVideoId: v.youtubeVideoId,
+          rootSeedVideoId: v.id,
         }));
         const scrapeResult = await scrapeRecommendedForSeeds(deps, seeds, job.data.jobRunId);
         recommendedVideosFound = scrapeResult.newVideosEnqueued + scrapeResult.knownVideosLinked;

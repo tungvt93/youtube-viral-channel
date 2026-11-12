@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "bullmq";
+import { QUOTA_COST } from "@yvi/youtube-client";
 import type { KeywordSearchJobData } from "@yvi/shared";
 import type { Queues } from "../queues/index";
 
@@ -92,6 +93,7 @@ describe("createKeywordSearchProcessor", () => {
     const result = await processor(makeJob());
 
     expect(markKeywordSearchRunning).toHaveBeenCalledWith(deps.db, "ks-1");
+    expect(checkQuotaGuard).toHaveBeenCalledWith(deps.db, QUOTA_COST.search_list, expect.any(Date));
     expect(result).toEqual({ videosFound: 2, recommendedVideosFound: 4 });
     expect(finishKeywordSearch).toHaveBeenCalledWith(
       deps.db,
@@ -279,6 +281,13 @@ describe("createKeywordSearchProcessor", () => {
     expect(scrapeRecommendedForSeeds).toHaveBeenCalledWith(deps, expect.any(Array), "run-ks-1");
     const seeds = scrapeRecommendedForSeeds.mock.calls[0][1];
     expect(seeds).toHaveLength(MAX_SEEDS_PER_RUN);
+    expect(seeds[0]).toEqual({
+      videoId: "internal-v0",
+      youtubeVideoId: "v0",
+      gl: "US",
+      hl: "en",
+      rootSeedVideoId: "internal-v0",
+    });
   });
 
   it("rethrows and marks failed on an unexpected error from youtube.search", async () => {
@@ -299,6 +308,7 @@ describe("createKeywordSearchProcessor", () => {
     const processor = createKeywordSearchProcessor(deps);
 
     await expect(processor(makeJob())).rejects.toThrow("network boom");
+    expect(recordApiUsage).toHaveBeenCalledWith(deps.db, expect.objectContaining({ endpoint: "search.list", status: "error", marketId: "market-1" }));
     expect(finishKeywordSearch).toHaveBeenCalledWith(deps.db, expect.objectContaining({ status: "failed", errorMessage: "Error: network boom" }));
     expect(finishJobRun).toHaveBeenCalledWith(deps.db, expect.objectContaining({ status: "failed" }));
   });
